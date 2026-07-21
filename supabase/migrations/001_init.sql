@@ -32,7 +32,6 @@ create table public.cafes (
   lng double precision not null,
   price text,
   moods text[] not null default '{}',
-  source text not null default 'user' check (source in ('public_data', 'user')),
   -- 커뮤니티 검증 상태: 등록 직후 pending → 확인 3표 이상 verified / 신고 누적 flagged
   status text not null default 'pending' check (status in ('pending', 'verified', 'flagged')),
   owner uuid references public.profiles (id) on delete set null,
@@ -94,7 +93,7 @@ begin
     case when bad_cnt >= 3 then 'flagged'
          when ok_cnt >= 3 then 'verified'
          else 'pending' end
-  where id = target and source = 'user';
+  where id = target;
   return null;
 end $$;
 create trigger on_cafe_check_change
