@@ -1,0 +1,7 @@
+.claude/
+*.log
+.DS_Store
+.vercel/
+# 원본 공공데이터 (변환본 cafes-data.js만 사용)
+*.xls
+*.csv
