@@ -1344,10 +1344,74 @@ function openSharedCafe() {
   return true;
 }
 
-/* 길찾기: 카카오맵 길찾기 페이지 새 탭 (API 키 불필요) */
+/* ===== 길찾기: 내 위치를 출발지로 지도 앱 연결 ===== */
+let routeMode = 'car';   // car | transit | walk
+let routeCafe = null;
+
 function openRoute() {
-  const c = currentCafe;
-  window.open(`https://map.kakao.com/link/to/${encodeURIComponent(c.name)},${c.lat},${c.lng}`, '_blank');
+  routeCafe = currentCafe;
+  if (!routeCafe) return;
+  document.getElementById('route-to').textContent = routeCafe.name;
+  document.getElementById('modal-route').classList.add('open');
+  setRouteMode(routeMode);
+  updateRouteFrom();
+}
+
+function updateRouteFrom() {
+  const fromEl = document.getElementById('route-from');
+  const distEl = document.getElementById('route-dist');
+  const hintEl = document.getElementById('route-hint');
+  if (myPos) {
+    fromEl.textContent = '내 위치';
+    distEl.textContent = `직선거리 약 ${fmtDist(distM(myPos, routeCafe))}`;
+    hintEl.textContent = '카카오맵은 이동 수단을 앱 화면에서 선택해 주세요.';
+    return;
+  }
+  fromEl.textContent = '내 위치를 확인하는 중...';
+  distEl.textContent = '';
+  hintEl.textContent = '';
+  if (!navigator.geolocation) {
+    fromEl.textContent = '위치를 알 수 없어요';
+    hintEl.textContent = '출발지는 지도 앱에서 직접 지정해 주세요.';
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(p => {
+    myPos = { lat: p.coords.latitude, lng: p.coords.longitude };
+    if (map) setMyPosMarker(new kakao.maps.LatLng(myPos.lat, myPos.lng));
+    updateRouteFrom();
+  }, () => {
+    fromEl.textContent = '위치 권한이 꺼져 있어요';
+    hintEl.textContent = '허용하면 내 위치에서 출발하는 경로를 열 수 있어요.';
+  }, { enableHighAccuracy: true, timeout: 8000 });
+}
+
+function setRouteMode(mode) {
+  routeMode = mode;
+  document.querySelectorAll('#seg-route-mode button').forEach(b =>
+    b.classList.toggle('on', b.dataset.v === mode));
+}
+
+function openRouteIn(app) {
+  const c = routeCafe;
+  if (!c) return;
+  const name = encodeURIComponent(c.name);
+  let url;
+
+  if (app === 'kakao') {
+    // 카카오맵 링크 API: 출발지가 있으면 from/to, 없으면 도착지만
+    // (이동 수단은 링크로 지정할 수 없어 카카오맵 화면에서 선택)
+    url = encodeURI(myPos
+      ? `https://map.kakao.com/link/from/내 위치,${myPos.lat},${myPos.lng}/to/${c.name},${c.lat},${c.lng}`
+      : `https://map.kakao.com/link/to/${c.name},${c.lat},${c.lng}`);
+  } else {
+    // 네이버지도: 좌표 기반 경로 (출발지 없으면 도착지 검색으로)
+    const modeSeg = { car: 'car', transit: 'transit', walk: 'walk' }[routeMode];
+    url = myPos
+      ? `https://map.naver.com/p/directions/${myPos.lng},${myPos.lat},${encodeURIComponent('내 위치')},,/${c.lng},${c.lat},${name},,/-/${modeSeg}`
+      : `https://map.naver.com/p/search/${name}`;
+  }
+  window.open(url, '_blank', 'noopener');
+  closeModal('modal-route');
 }
 
 /* 리뷰들의 분위기·가격 투표 집계 */
