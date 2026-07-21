@@ -141,8 +141,6 @@ const SOCIAL = [
     icon: '<svg class="sicon" viewBox="0 0 24 24"><path fill="#4285F4" d="M23 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.2a5.3 5.3 0 0 1-2.3 3.500v2.9h3.7c2.2-2 3.4-5 3.4-8.6z"/><path fill="#34A853" d="M12 23.5c3.1 0 5.7-1 7.6-2.8l-3.7-2.9c-1 .7-2.3 1.1-3.9 1.1-3 0-5.5-2-6.4-4.7H1.8v3a11.5 11.5 0 0 0 10.2 6.3z"/><path fill="#FBBC05" d="M5.6 14.2a6.9 6.9 0 0 1 0-4.4v-3H1.8a11.5 11.5 0 0 0 0 10.4l3.8-3z"/><path fill="#EA4335" d="M12 5.1c1.7 0 3.2.6 4.4 1.7l3.3-3.3A11.5 11.5 0 0 0 1.8 6.8l3.8 3c.9-2.7 3.4-4.7 6.4-4.7z"/></svg>' },
   { id: 'kakao', label: '카카오로 계속하기', cls: 'kakao',
     icon: '<svg class="sicon" viewBox="0 0 24 24"><path fill="#191600" d="M12 3C6.9 3 2.8 6.3 2.8 10.3c0 2.6 1.7 4.9 4.3 6.2l-1 3.8c-.1.3.3.6.6.4l4.5-3c.3 0 .5.1.8.1 5.1 0 9.2-3.3 9.2-7.4S17.1 3 12 3z"/></svg>' },
-  { id: 'naver', label: '네이버로 계속하기', cls: 'naver',
-    icon: '<svg class="sicon" viewBox="0 0 24 24"><path fill="#fff" d="M14.2 12.4 9.5 5.5H5v13h4.6v-6.9l4.7 6.9H19v-13h-4.8z"/></svg>' },
   { id: 'apple', label: 'Apple로 계속하기', cls: 'apple',
     icon: '<svg class="sicon" viewBox="0 0 24 24"><path fill="#fff" d="M16.4 12.7c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9s-1.8-.9-3-.8c-1.5 0-2.9.9-3.7 2.3-1.6 2.7-.4 6.7 1.1 8.9.8 1.1 1.7 2.3 2.9 2.2 1.2 0 1.6-.7 3-.7s1.8.7 3 .7 2-1.1 2.8-2.2c.9-1.2 1.2-2.4 1.2-2.5 0 0-2.4-.9-2.4-3.5zM14.2 5.9c.6-.8 1-1.9.9-3-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-.9 2.9 1 0 2.1-.5 2.7-1.3z"/></svg>' },
 ];
@@ -162,7 +160,7 @@ async function socialLogin(provider) {
     options: { redirectTo: location.origin + location.pathname },
   });
   if (error) {
-    const name = { google: 'Google', kakao: '카카오', naver: '네이버', apple: 'Apple' }[provider] || provider;
+    const name = { google: 'Google', kakao: '카카오', apple: 'Apple' }[provider] || provider;
     toast(`${name} 로그인이 아직 연결되지 않았어요. 이메일로 가입해 주세요`);
   }
 }
@@ -293,11 +291,29 @@ function renderAccountSettings() {
        </div>`;
 }
 function providerLabel(p) {
-  return { google: 'Google', kakao: '카카오', naver: '네이버', apple: 'Apple' }[p] || p;
+  return { google: 'Google', kakao: '카카오', apple: 'Apple' }[p] || p;
 }
 
 /* ===== 사용자 설정 (프로필 settings jsonb / 비로그인은 localStorage) ===== */
 const DEFAULT_PREFS = { startLoc: 'myloc', defaultSort: 'default', highlightFavs: true, saveRecent: true };
+
+/* 시작 위치 결정: 마지막으로 본 곳 → 없으면 등록된 카페들의 중심 (지역 하드코딩 없음) */
+function fallbackCenter() {
+  if (state.lastView) return state.lastView;
+  if (cafes.length) {
+    const n = Math.min(cafes.length, 500);
+    let lat = 0, lng = 0;
+    for (let i = 0; i < n; i++) { lat += cafes[i].lat; lng += cafes[i].lng; }
+    return { lat: lat / n, lng: lng / n, level: 7 };
+  }
+  return { lat: 36.5, lng: 127.9, level: 13 }; // 데이터가 없으면 전국 뷰
+}
+function saveLastView() {
+  if (!map) return;
+  const c = map.getCenter();
+  state.lastView = { lat: c.getLat(), lng: c.getLng(), level: map.getLevel() };
+  saveState();
+}
 let prefs = { ...DEFAULT_PREFS };
 
 function applyPrefs() {
@@ -372,7 +388,7 @@ function showAboutData() {
          '· 카페 등록: 지도를 우클릭해 그 자리에 카페를 추가할 수 있어요.\n' +
          '· 정보 검증: 카페 상세에서 [맞아요] / [달라요]로 의견을 남기면, 3명이 확인한 카페는 검증됨으로, 다르다는 의견이 모이면 확인 필요로 표시돼요.\n' +
          '· 분위기와 가격대: 리뷰를 쓸 때 함께 투표한 결과가 모여 카페의 태그가 됩니다.\n\n' +
-         '현재 지도에 있는 대구 카페들은 서비스를 시작하며 넣어둔 테스트 데이터로, 이용자가 등록한 카페와 똑같이 검증 대상이에요.',
+         '지금 지도에 있는 카페들은 서비스를 시작하며 넣어둔 초기 데이터로, 이용자가 등록한 카페와 똑같이 검증 대상이에요.',
     ok: '알겠어요',
   });
 }
@@ -459,9 +475,10 @@ function baseImageFor(id) {
 
 /* ===== 지도 초기화 ===== */
 function initMap() {
+  const start = fallbackCenter(); // 마지막으로 본 곳 → 데이터 중심 → 전국
   map = new kakao.maps.Map(document.getElementById('map'), {
-    center: new kakao.maps.LatLng(35.858, 128.55), // 대구 중심 (중구~달서구)
-    level: 7,
+    center: new kakao.maps.LatLng(start.lat, start.lng),
+    level: start.level,
   });
   geocoder = new kakao.maps.services.Geocoder();
 
@@ -512,9 +529,12 @@ function initMap() {
   kakao.maps.event.addListener(map, 'rightclick', e => showRegisterButton(e.latLng));
   document.getElementById('map').addEventListener('contextmenu', e => e.preventDefault());
 
-  // 지도를 움직이면 "이 지역에서 재검색" 버튼 표시
+  // 지도를 움직이면 "이 지역에서 재검색" 버튼 표시 + 마지막 위치 기억
   // (검색 중이면 누를 때 새 지도 중심 기준으로 재정렬됨)
-  const showAreaBtn = () => { document.getElementById('area-btn').style.display = 'flex'; };
+  const showAreaBtn = () => {
+    document.getElementById('area-btn').style.display = 'flex';
+    saveLastView();
+  };
   kakao.maps.event.addListener(map, 'dragend', showAreaBtn);
   kakao.maps.event.addListener(map, 'zoom_changed', showAreaBtn);
 
@@ -523,11 +543,11 @@ function initMap() {
 
   document.getElementById('map-loading').style.display = 'none';
 
-  // 최초 검색: 현재(대구 시내) 영역 기준으로 마커 표시
+  // 최초 검색: 현재 보이는 영역 기준으로 마커 표시
   areaBounds = map.getBounds();
   applyFilters(false);
   // 공유 링크 > 설정된 시작 위치 순으로 처리
-  if (!openSharedCafe() && prefs.startLoc !== 'daegu') autoLocate();
+  if (!openSharedCafe() && prefs.startLoc === 'myloc') autoLocate();
 }
 
 /* 카페 1곳의 마커 생성 */
@@ -695,7 +715,7 @@ function locateMe(onSuccess) {
   }, () => toast('위치 권한을 허용해 주세요'), { enableHighAccuracy: true, timeout: 8000 });
 }
 
-/* 접속 시 내 위치 주변으로 시작 (거부하거나 주변에 데이터가 없으면 대구 시내 유지) */
+/* 접속 시 내 위치 주변으로 시작 (거부하면 마지막으로 본 곳 유지) */
 function autoLocate() {
   if (!navigator.geolocation) return;
   navigator.geolocation.getCurrentPosition(p => {
@@ -707,14 +727,9 @@ function autoLocate() {
     setTimeout(() => {
       const b = map.getBounds();
       const near = getFiltered().filter(c => b.contain(new kakao.maps.LatLng(c.lat, c.lng))).length;
-      if (near) {
-        searchThisArea();
-      } else {
-        toast('내 주변에 등록된 카페가 없어 대구 시내를 보여드려요');
-        map.setLevel(7);
-        map.setCenter(new kakao.maps.LatLng(35.858, 128.55));
-        setTimeout(searchThisArea, 400);
-      }
+      searchThisArea();
+      if (!near) toast('내 주변에는 아직 등록된 카페가 없어요. 지도를 우클릭해 등록해보세요');
+      saveLastView();
     }, 400);
   }, () => {}, { timeout: 5000 });
 }
@@ -1521,8 +1536,8 @@ async function doRegister() {
     const { data: row, error } = await db.from('cafes').insert({
       name, addr,
       phone: phone || null,
-      lat: pendingPos ? pendingPos.lat : 35.858,
-      lng: pendingPos ? pendingPos.lng : 128.55,
+      lat: pendingPos ? pendingPos.lat : map.getCenter().getLat(),
+      lng: pendingPos ? pendingPos.lng : map.getCenter().getLng(),
       price: price || null,
       moods: tags,
       owner: currentUser.id,

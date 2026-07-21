@@ -418,7 +418,6 @@
   .social-btn .sicon { width: 18px; height: 18px; flex-shrink: 0; }
   .social-btn.google { background: #fff; border-color: #dadce0; color: #3c4043; }
   .social-btn.kakao { background: #fee500; color: #191600; }
-  .social-btn.naver { background: #03c75a; color: #fff; }
   .social-btn.apple { background: #000; color: #fff; }
   .auth-divider {
     display: flex; align-items: center; gap: 10px; margin: 16px 0 14px;
@@ -655,7 +654,7 @@
         <li><b>제품 설정 → 카카오맵 → 활성화 설정 ON</b></li>
         <li><code>index.html</code> 맨 아래 <code>KAKAO_APP_KEY</code> 값에 복사한 JavaScript 키를 붙여넣고 새로고침</li>
       </ol>
-      <p style="margin-top:10px;">키를 넣기 전까지 지도가 표시되지 않습니다. (카페 데이터 1,400곳은 이미 준비 완료)</p>
+      <p style="margin-top:10px;">키를 넣기 전까지 지도가 표시되지 않습니다.</p>
     </div>
   </div>
 
@@ -905,7 +904,7 @@
           </div>
           <div class="seg" id="seg-startloc">
             <button data-v="myloc" onclick="setPref('startLoc','myloc')">내 위치</button>
-            <button data-v="daegu" onclick="setPref('startLoc','daegu')">대구 시내</button>
+            <button data-v="last" onclick="setPref('startLoc','last')">마지막으로 본 곳</button>
           </div>
         </div>
         <div class="set-row">
@@ -987,7 +986,7 @@
 <div class="modal-back open" id="modal-onboard">
   <div class="modal">
     <h2>카페맵에 오신 것을 환영해요!</h2>
-    <p>대구 지역 카페 <b>1,400곳</b>을 지도에서 바로 찾아볼 수 있어요.</p>
+    <p>내 주변 카페를 <b>가격대와 분위기</b>로 찾고, 직접 등록하고 함께 검증하는 지도예요.</p>
     <div class="onboard-step">
       <div class="num"><i data-ic="search" data-size="14"></i></div>
       <div><b>지도에서 카페 찾기</b><p>마커를 클릭하면 상호명·주소·전화번호를 확인할 수 있어요.</p></div>
