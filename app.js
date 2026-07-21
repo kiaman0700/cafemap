@@ -141,8 +141,6 @@ const SOCIAL = [
     icon: '<svg class="sicon" viewBox="0 0 24 24"><path fill="#4285F4" d="M23 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.2a5.3 5.3 0 0 1-2.3 3.500v2.9h3.7c2.2-2 3.4-5 3.4-8.6z"/><path fill="#34A853" d="M12 23.5c3.1 0 5.7-1 7.6-2.8l-3.7-2.9c-1 .7-2.3 1.1-3.9 1.1-3 0-5.5-2-6.4-4.7H1.8v3a11.5 11.5 0 0 0 10.2 6.3z"/><path fill="#FBBC05" d="M5.6 14.2a6.9 6.9 0 0 1 0-4.4v-3H1.8a11.5 11.5 0 0 0 0 10.4l3.8-3z"/><path fill="#EA4335" d="M12 5.1c1.7 0 3.2.6 4.4 1.7l3.3-3.3A11.5 11.5 0 0 0 1.8 6.8l3.8 3c.9-2.7 3.4-4.7 6.4-4.7z"/></svg>' },
   { id: 'kakao', label: '카카오로 계속하기', cls: 'kakao',
     icon: '<svg class="sicon" viewBox="0 0 24 24"><path fill="#191600" d="M12 3C6.9 3 2.8 6.3 2.8 10.3c0 2.6 1.7 4.9 4.3 6.2l-1 3.8c-.1.3.3.6.6.4l4.5-3c.3 0 .5.1.8.1 5.1 0 9.2-3.3 9.2-7.4S17.1 3 12 3z"/></svg>' },
-  { id: 'apple', label: 'Apple로 계속하기', cls: 'apple',
-    icon: '<svg class="sicon" viewBox="0 0 24 24"><path fill="#fff" d="M16.4 12.7c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9s-1.8-.9-3-.8c-1.5 0-2.9.9-3.7 2.3-1.6 2.7-.4 6.7 1.1 8.9.8 1.1 1.7 2.3 2.9 2.2 1.2 0 1.6-.7 3-.7s1.8.7 3 .7 2-1.1 2.8-2.2c.9-1.2 1.2-2.4 1.2-2.5 0 0-2.4-.9-2.4-3.5zM14.2 5.9c.6-.8 1-1.9.9-3-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-.9 2.9 1 0 2.1-.5 2.7-1.3z"/></svg>' },
 ];
 
 function renderSocialButtons() {
@@ -160,7 +158,7 @@ async function socialLogin(provider) {
     options: { redirectTo: location.origin + location.pathname },
   });
   if (error) {
-    const name = { google: 'Google', kakao: '카카오', apple: 'Apple' }[provider] || provider;
+    const name = { google: 'Google', kakao: '카카오' }[provider] || provider;
     toast(`${name} 로그인이 아직 연결되지 않았어요. 이메일로 가입해 주세요`);
   }
 }
@@ -291,7 +289,7 @@ function renderAccountSettings() {
        </div>`;
 }
 function providerLabel(p) {
-  return { google: 'Google', kakao: '카카오', apple: 'Apple' }[p] || p;
+  return { google: 'Google', kakao: '카카오' }[p] || p;
 }
 
 /* ===== 사용자 설정 (프로필 settings jsonb / 비로그인은 localStorage) ===== */
