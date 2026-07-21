@@ -8,7 +8,7 @@
 - 찜, 내 위치 기반 가까운 순, 로드뷰(카페 위치 핀 표시), 장소 공유 링크
 - 사용자 카페 등록 + 커뮤니티 검증(맞아요/달라요 투표)
 
-## 실행 (데모)
+## 실행
 
 정적 사이트입니다. 카카오맵 JS 키가 도메인 검사를 하므로 로컬 서버로 여세요.
 
@@ -17,20 +17,34 @@ python -m http.server 5188
 # http://localhost:5188
 ```
 
-- 데모 계정: `test` / `test123`
-- 데이터: 전국카페표준데이터(2026-07) 중 대구 1,400곳 (`cafes-data.js`)
-- 데모에서는 리뷰·찜·계정이 localStorage에 저장됩니다.
+테스트 계정: `test@cafemap.app` / `test1234`
 
-## 프로덕션 구조 (진행 중)
+## 구조
 
 | 영역 | 스택 |
 |---|---|
-| 프론트 | 정적 HTML/JS (현 데모) → supabase-js 연동 |
-| DB/인증/스토리지 | Supabase (`supabase/migrations/001_init.sql`) |
-| 시드 | `supabase/seed/seed_cafes.sql` (공공데이터 1,400곳) |
+| 프론트 | 정적 HTML/CSS/JS (`index.html`, `app.js`) + supabase-js |
+| DB / 인증 / 스토리지 | Supabase |
 | 배포 | Vercel |
 | 지도 | Kakao Maps JS SDK (배포 도메인을 카카오 개발자 콘솔에 등록 필요) |
 
-스키마: `profiles` · `cafes`(출처/검증상태) · `cafe_photos` · `reviews`(1인 1리뷰, 사진, 분위기·가격 투표) · `favorites` · `cafe_checks`(커뮤니티 검증, 3표 이상 시 자동 상태 전환) — 전 테이블 RLS 적용.
+### 데이터베이스
 
-스토리지 버킷(공개 읽기 / 로그인 쓰기): `cafe-photos`, `review-photos`
+`supabase/migrations/001_init.sql` — 전 테이블 RLS(읽기 공개 / 쓰기는 본인 것만) 적용.
+
+| 테이블 | 역할 |
+|---|---|
+| `profiles` | 가입 시 트리거로 자동 생성 (닉네임·이름·전화) |
+| `cafes` | 카페 정보 + 커뮤니티 검증 상태 (`pending` / `verified` / `flagged`) |
+| `cafe_photos` | 카페 사진 |
+| `reviews` | 1인 1리뷰 (별점·본문·사진·분위기 투표·체감 가격 투표) |
+| `favorites` | 찜 |
+| `cafe_checks` | 정보 검증 투표(맞아요/달라요) — 3표 이상이면 트리거가 카페 상태를 자동 전환 |
+
+`cafe_list` 뷰가 리뷰 수·평균 별점·투표 최빈 가격·분위기 집계를 한 번에 내려줍니다.
+
+스토리지 버킷(공개 읽기 / 로그인 업로드 / 본인 것만 삭제): `cafe-photos`, `review-photos`
+
+### 카페 데이터에 대해
+
+카페 정보는 **사용자가 직접 등록하고 서로 검증하는** 구조입니다. 현재 들어 있는 대구 1,400곳(`supabase/seed/seed_cafes.sql`)은 초기 화면을 채우기 위한 **테스트 데이터**이며, 사용자 등록 카페와 동일하게 취급됩니다(별도 출처 표시 없음, 검증 투표 대상 동일).

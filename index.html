@@ -406,6 +406,39 @@
   .btn.rv { background: #fff; color: #6b6259; border: 1px solid #e2d8ca; }
   .btn.rv:hover { background: var(--cream); }
 
+  /* 사진 스트립 (카페/리뷰 사진) */
+  .photo-strip {
+    display: flex; gap: 6px; overflow-x: auto; margin: 10px 0 4px;
+    scrollbar-width: thin; padding-bottom: 4px;
+  }
+  .photo-strip img {
+    height: 96px; border-radius: 10px; cursor: zoom-in; flex-shrink: 0;
+    object-fit: cover; max-width: 160px; border: 1px solid #f0e9df;
+  }
+  .photo-strip.small img { height: 64px; max-width: 110px; border-radius: 8px; }
+
+  /* 검증 상태 배지 + 정보 확인 투표 */
+  .vbadge {
+    display: inline-block; font-size: 11px; font-weight: 700; padding: 2.5px 8px;
+    border-radius: 6px; background: #f4efe7; color: #8a7f73;
+  }
+  .vbadge.ok { background: #e7f3ea; color: #2f7d43; }
+  .vbadge.bad { background: #fdeeee; color: #c92a2a; }
+  .check-box {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    border: 1px solid #f0e9df; border-radius: 10px; padding: 9px 12px; margin: 10px 0;
+  }
+  .cb-head { display: flex; align-items: center; gap: 8px; }
+  .cb-q { font-size: 12.5px; color: #8a7f73; }
+  .cb-btns { display: flex; gap: 6px; }
+  .cb {
+    border: 1px solid #e2d8ca; border-radius: 8px; background: #fff;
+    font-size: 12px; padding: 5px 10px; cursor: pointer; color: #6b6259;
+  }
+  .cb:hover { background: var(--cream); }
+  .cb.on { background: var(--brown); border-color: var(--brown); color: #fff; }
+  .cb.on.bad { background: #c92a2a; border-color: #c92a2a; }
+
   /* 로드뷰 안 카페 이름표 */
   .rv-cafe-tag {
     background: #fff; border: 1.5px solid var(--accent); border-radius: 10px;
@@ -657,6 +690,10 @@
     <div class="form-group">
       <label>전화번호 (선택)</label>
       <input id="reg-phone" type="tel" placeholder="예: 053-123-4567">
+    </div>
+    <div class="form-group">
+      <label>카페 사진 (선택, 5MB 이하)</label>
+      <input type="file" id="reg-photos" accept="image/*" multiple style="width:100%; font-size:12.5px;">
       <div class="form-hint">없으면 비워두세요. 비워두면 등록되지 않습니다.</div>
     </div>
     <div class="form-group">
@@ -697,7 +734,7 @@
           <button class="save-btn" style="margin-top:0;" onclick="openLogin()">로그인</button>
           <button class="save-btn" style="margin-top:0; background:#fff; color:var(--brown); border:1.5px solid var(--brown);" onclick="openSignup()">회원가입</button>
         </div>
-        <p style="font-size:12px; color:#b0a696; margin-top:14px;">데모 계정: test / test123</p>
+        <p style="font-size:12px; color:#b0a696; margin-top:14px;">테스트 계정: test@cafemap.app / test1234</p>
       </div>
     </div>
 
@@ -748,7 +785,7 @@
   <div class="fullpage-inner">
     <div class="fp-title"><button class="back-btn" onclick="goHome()">←</button> 설정</div>
     <div class="settings-item" id="settings-auth" onclick="handleAuthItem()">
-      <span><i data-ic="key" data-size="15"></i> 로그인</span><small>데모 계정: test / test123 ›</small>
+      <span><i data-ic="key" data-size="15"></i> 로그인</span><small>테스트 계정: test@cafemap.app / test1234 ›</small>
     </div>
     <div class="settings-item" id="settings-signup" onclick="openSignup()">
       <span><i data-ic="user" data-size="15"></i> 회원가입</span><small>계정을 만들고 리뷰 혜택을 받아보세요 ›</small>
@@ -804,8 +841,8 @@
 <div class="modal-back" id="modal-login">
   <div class="modal">
     <h2>로그인</h2>
-    <p style="margin-bottom:14px; font-size:13px; color:#8a7f73;">데모 계정 → 아이디: <b>test</b> / 비밀번호: <b>test123</b></p>
-    <div class="form-group"><label>아이디</label><input id="login-id" type="text" placeholder="아이디"
+    <p style="margin-bottom:14px; font-size:13px; color:#8a7f73;">테스트 계정 → <b>test@cafemap.app</b> / <b>test1234</b></p>
+    <div class="form-group"><label>이메일</label><input id="login-id" type="email" placeholder="example@email.com"
          onkeydown="if(event.key==='Enter')doLogin()"></div>
     <div class="form-group"><label>비밀번호</label><input id="login-pw" type="password" placeholder="비밀번호"
          onkeydown="if(event.key==='Enter')doLogin()"></div>
@@ -824,10 +861,9 @@
   <div class="modal">
     <h2>회원가입</h2>
     <p style="margin-bottom:14px;">가입하면 작성한 리뷰가 저장되고 <b>리뷰 혜택</b>을 받을 수 있어요.</p>
-    <div class="form-group"><label>아이디 *</label><input id="signup-id" type="text" placeholder="아이디"></div>
+    <div class="form-group"><label>이메일 *</label><input id="signup-id" type="email" placeholder="example@email.com"></div>
     <div class="form-group"><label>비밀번호 *</label><input id="signup-pw" type="password" placeholder="비밀번호"></div>
     <div class="form-group"><label>닉네임 *</label><input id="signup-nick" type="text" placeholder="리뷰에 표시될 이름"></div>
-    <div class="form-group"><label>이메일 (선택)</label><input id="signup-email" type="email" placeholder="example@email.com"></div>
     <div class="form-group" style="font-size:13px; color:#6b6259;">
       <label style="font-weight:400; display:flex; align-items:center; gap:6px;">
         <input id="signup-agree" type="checkbox" style="width:auto;"> 이용약관 및 개인정보처리방침에 동의합니다.
@@ -869,7 +905,6 @@
 <div id="toast"></div>
 
 <!-- 카페 더미데이터 (엑셀 → 변환: 상호명/주소/전화번호(있는 곳만)/좌표) -->
-<script src="cafes-data.js?v=2"></script>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="app.js?v=1"></script>

@@ -4,6 +4,43 @@
    ================================================================ */
 const KAKAO_APP_KEY = 'e9c4488853a47ff9d2714c7f969d52b2';
 
+/* ===== Supabase ===== */
+const SUPABASE_URL = 'https://tbuymbfkqpxgtcsgillj.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_MfbaHTokdLXiCeJBSDuUfA_iQB3D8QK';
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/* DB 행 → 앱에서 쓰는 카페 객체 */
+function cafeFromRow(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    addr: row.addr,
+    phone: row.phone || undefined,
+    lat: row.lat,
+    lng: row.lng,
+    price: row.price || '',
+    mood: row.moods || [],
+    status: row.status,
+    owner: row.owner,
+    review_count: row.review_count || 0,
+    avg_stars: row.avg_stars ? +row.avg_stars : 0,
+    reviews: null, // 상세에서 지연 로드
+  };
+}
+async function fetchCafes() {
+  // Supabase는 요청당 1,000행 제한 → 페이지네이션으로 전부 로드
+  const page = 1000;
+  const all = [];
+  for (let from = 0; ; from += page) {
+    const { data, error } = await db.from('cafe_list').select('*')
+      .order('id').range(from, from + page - 1);
+    if (error) { toast('카페 데이터를 불러오지 못했어요'); console.error(error); break; }
+    all.push(...data);
+    if (data.length < page) break;
+  }
+  cafes = all.map(cafeFromRow);
+}
+
 /* ===== SVG 아이콘 세트 (선형, currentColor) ===== */
 const ICONS = {
   cup: '<path d="M5 8.5h11v5.5a4.5 4.5 0 0 1-4.5 4.5h-2A4.5 4.5 0 0 1 5 14z"/><path d="M16 10h1.6a2.5 2.5 0 0 1 0 5H16"/><line x1="8" y1="3.5" x2="8" y2="5.5"/><line x1="12" y1="3.5" x2="12" y2="5.5"/>',
@@ -52,122 +89,80 @@ let tempMarker = null;      // 등록용 임시 마커
 let tempOverlay = null;     // 등록 버튼 오버레이
 const markerByCafe = new Map();
 
-/* 엑셀 데이터에 id/리뷰 필드 부여 */
-const cafes = CAFE_DATA.map((c, i) => ({ id: i, reviews: [], mood: [], ...c }));
-
-/* ===== 가짜 리뷰·분위기 데이터 생성 (화면 표시용, 원본 데이터는 그대로) ===== */
+/* 카페 목록: Supabase에서 로드 (fetchCafes) */
+let cafes = [];
 const MOOD_POOL = ['조용한', '공부하기 좋은', '감성적인', '애견동반', '디저트 맛집', '밤늦게까지'];
-const REVIEW_TEXTS = [
-  '원두가 신선하고 커피 맛이 깊어요. 재방문 의사 100%!',
-  '조용해서 노트북 들고 작업하기 좋아요. 콘센트도 넉넉합니다.',
-  '디저트가 정말 맛있어요. 특히 케이크 추천!',
-  '사장님이 친절하시고 매장이 깨끗해요.',
-  '분위기가 아늑해서 친구랑 수다 떨기 좋아요.',
-  '창가 자리가 예뻐서 사진 찍기 좋습니다.',
-  '가성비 최고예요. 이 가격에 이 퀄리티라니.',
-  '좌석 간격이 넓어서 편하게 있다 왔어요.',
-  '시그니처 메뉴 꼭 드셔보세요. 후회 없습니다.',
-  '주차가 편해서 자주 가게 돼요.',
-  '음악 선곡이 좋아서 오래 머물고 싶은 곳이에요.',
-  '라떼 아트가 예술입니다. 맛도 좋아요.',
-];
-const REVIEW_USERS = ['커피순례자', '라떼장인', '디저트헌터', '카페투어러', '동네주민', '빵순이', '아아중독', '주말나들이'];
 
-const PRICE_POOL = ['₩3,000~5,000', '₩5,000~7,000', '₩7,000~10,000'];
-
-cafes.forEach((c, i) => {
-  // 분위기 태그 1~3개: 시드 기반 난수로 부여해 모든 태그 조합이 고르게 나오도록
-  const rnd = n => { const x = Math.sin(i * 997 + n * 131) * 10000; return x - Math.floor(x); };
-  c.mood = MOOD_POOL.filter((m, k) => rnd(k) < 0.3).slice(0, 3);
-  if (!c.mood.length) c.mood = [MOOD_POOL[i % 6]];
-  c.price = PRICE_POOL[(i * 7 + 1) % 3];
-  // 리뷰 0~3개 (약 3/4의 카페가 리뷰 보유)
-  const n = i % 4;
-  for (let k = 0; k < n; k++) {
-    const m = ((i * 7 + k * 11) % 60) + 1; // 최근 2개월 내 날짜
-    const d = new Date(2026, 6, 10 - m);
-    c.reviews.push({
-      user: REVIEW_USERS[(i + k * 3) % REVIEW_USERS.length],
-      stars: 3 + ((i + k) % 3),
-      date: d.toISOString().slice(0, 10),
-      text: REVIEW_TEXTS[(i + k * 5) % REVIEW_TEXTS.length],
-      moods: (i + k) % 3 ? [c.mood[0]] : c.mood.slice(0, 2), // 리뷰어의 분위기 투표
-      price: (i + k) % 2 ? c.price : '',                     // 체감 가격대 투표
-    });
-  }
-});
-
-/* ===== localStorage 저장소 =====
-   리뷰·찜·등록 카페·계정·세션이 새로고침 후에도 유지됨 */
-const LS_KEY = 'cafemap_demo_v1';
+/* ===== 로컬 설정 (온보딩·최근 검색어만) ===== */
+const LS_KEY = 'cafemap_local_v2';
 let state;
 try { state = JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { state = {}; }
-state.accounts = state.accounts || [];
-state.baseReviews = state.baseReviews || {}; // 기본 카페에 단 내 리뷰 { cafeId: [review...] }
-state.regCafes = state.regCafes || [];       // 내가 등록한 카페
-state.favsByUser = state.favsByUser || {};   // 찜: 계정별 { favs: [기본 카페 id], favRids: [등록 카페 rid] }
-// 구버전(전역 찜) 데이터는 test 계정으로 이관
-if ((state.favs && state.favs.length) || (state.favRids && state.favRids.length)) {
-  state.favsByUser.test = { favs: state.favs || [], favRids: state.favRids || [] };
-}
-delete state.favs;
-delete state.favRids;
-// 데모 기본 계정
-if (!state.accounts.some(a => a.id === 'test')) {
-  state.accounts.push({ id: 'test', pw: 'test123', nick: '커피러버', email: 'test@cafemap.demo' });
-}
 function saveState() { localStorage.setItem(LS_KEY, JSON.stringify(state)); }
 
-/* ===== 로그인 / 회원가입 ===== */
-let currentUser = state.session ? (state.accounts.find(a => a.id === state.session) || null) : null;
+/* ===== 로그인 / 회원가입 (Supabase Auth) ===== */
+let currentUser = null; // { id(uuid), email, nick, name, phone }
+
+async function initAuth() {
+  const { data: { session } } = await db.auth.getSession();
+  if (session) await loadProfile(session.user);
+  updateAuthUI();
+}
+async function loadProfile(user) {
+  const { data } = await db.from('profiles').select('*').eq('id', user.id).single();
+  currentUser = {
+    id: user.id,
+    email: user.email,
+    nick: data?.nick || user.email.split('@')[0],
+    name: data?.name || '',
+    phone: data?.phone || '',
+  };
+}
 
 function openLogin() {
   closeModal('modal-signup');
   document.getElementById('modal-login').classList.add('open');
   setTimeout(() => document.getElementById('login-id').focus(), 100);
 }
-function doLogin() {
-  const id = document.getElementById('login-id').value.trim();
+async function doLogin() {
+  const email = document.getElementById('login-id').value.trim();
   const pw = document.getElementById('login-pw').value;
-  const acc = state.accounts.find(a => a.id === id && a.pw === pw);
-  if (!acc) return toast('아이디 또는 비밀번호가 올바르지 않아요');
-  currentUser = acc;
-  state.session = acc.id;
-  saveState();
+  if (!email || !pw) return toast('이메일과 비밀번호를 입력해 주세요');
+  const { data, error } = await db.auth.signInWithPassword({ email, password: pw });
+  if (error) return toast('이메일 또는 비밀번호가 올바르지 않아요');
+  await loadProfile(data.user);
   closeModal('modal-login');
   document.getElementById('login-id').value = '';
   document.getElementById('login-pw').value = '';
-  loadUserFavs();
+  await loadUserFavs();
   updateAuthUI();
   if (document.getElementById('page-my').classList.contains('open')) renderMyPage();
-  toast(`${acc.nick}님, 환영해요!`);
+  toast(`${currentUser.nick}님, 환영해요!`);
 }
-function doLogout() {
+async function doLogout() {
+  await db.auth.signOut();
   currentUser = null;
-  state.session = null;
   favOnly = false; // 찜 필터는 로그인 전용
-  saveState();
-  loadUserFavs();
+  await loadUserFavs();
   updateAuthUI();
   if (document.getElementById('page-my').classList.contains('open')) renderMyPage();
   toast('로그아웃 되었습니다');
 }
 function handleAuthItem() { currentUser ? doLogout() : openLogin(); }
-function doSignup() {
-  const id = document.getElementById('signup-id').value.trim();
+async function doSignup() {
+  const email = document.getElementById('signup-id').value.trim();
   const pw = document.getElementById('signup-pw').value;
   const nick = document.getElementById('signup-nick').value.trim();
-  const email = document.getElementById('signup-email').value.trim();
-  if (!id || !pw || !nick) return toast('아이디·비밀번호·닉네임을 모두 입력해 주세요');
-  if (state.accounts.some(a => a.id === id)) return toast('이미 사용 중인 아이디예요');
+  if (!email || !pw || !nick) return toast('이메일·비밀번호·닉네임을 모두 입력해 주세요');
+  if (pw.length < 6) return toast('비밀번호는 6자 이상이어야 해요');
   if (!document.getElementById('signup-agree').checked) return toast('이용약관에 동의해 주세요');
-  const acc = { id, pw, nick, email };
-  state.accounts.push(acc);
-  currentUser = acc;
-  state.session = id;
-  saveState();
+  const { data, error } = await db.auth.signUp({ email, password: pw, options: { data: { nick } } });
+  if (error) {
+    return toast(/already|registered/i.test(error.message) ? '이미 가입된 이메일이에요' : '가입 실패: ' + error.message);
+  }
   closeModal('modal-signup');
-  loadUserFavs(); // 새 계정은 빈 찜 목록으로 시작
+  if (!data.session) return toast('확인 메일을 보냈어요. 메일 인증 후 로그인해 주세요');
+  await loadProfile(data.user);
+  await loadUserFavs();
   updateAuthUI();
   if (document.getElementById('page-my').classList.contains('open')) renderMyPage();
   toast(`가입 완료! ${nick}님, 환영해요`);
@@ -192,7 +187,7 @@ function updateAuthUI() {
   // 설정 메뉴
   document.getElementById('settings-auth').innerHTML = currentUser
     ? `<span>${ic('logout', 15)} 로그아웃</span><small>${currentUser.nick}님 로그인 중 ›</small>`
-    : `<span>${ic('key', 15)} 로그인</span><small>데모 계정: test / test123 ›</small>`;
+    : `<span>${ic('key', 15)} 로그인</span><small>테스트 계정: test@cafemap.app / test1234 ›</small>`;
   const signupItem = document.getElementById('settings-signup');
   if (signupItem) signupItem.style.display = currentUser ? 'none' : 'flex';
 }
@@ -377,7 +372,7 @@ function makeLabelOverlay(cafe, pinned) {
   el.innerHTML = `
     <div class="cl-name">${cafe.name}</div>
     <div class="cl-meta">
-      ${cafe.reviews.length ? `<span class="cl-star">★ ${avgRating(cafe).toFixed(1)}</span>` : '<span class="cl-new">리뷰 없음</span>'}
+      ${cafe.review_count ? `<span class="cl-star">★ ${cafe.avg_stars.toFixed(1)}</span>` : '<span class="cl-new">리뷰 없음</span>'}
       <span class="cl-price">${cafe.price}</span>
     </div>
     <div class="cl-meta"><span class="cl-mood">${cafe.mood.join(' · ')}</span></div>`;
@@ -547,47 +542,41 @@ function distM(a, b) {
 }
 function fmtDist(m) { return m < 1000 ? Math.round(m) + 'm' : (m / 1000).toFixed(1) + 'km'; }
 
-/* ===== 찜(즐겨찾기) ===== */
+/* ===== 찜(즐겨찾기) — Supabase favorites 테이블 ===== */
 const favorites = new Set();
-function toggleFav(id) {
+async function toggleFav(id) {
   if (!requireLogin()) return;
-  if (favorites.has(id)) { favorites.delete(id); toast('찜을 해제했어요'); }
-  else { favorites.add(id); toast('찜 목록에 추가했어요'); }
+  const adding = !favorites.has(id);
+  // UI 먼저 반영 (실패 시 롤백)
+  if (adding) favorites.add(id); else favorites.delete(id);
   const btn = document.getElementById('fav-btn-' + id);
-  if (btn) btn.classList.toggle('on', favorites.has(id));
-  // 지도 마커도 찜 표시로 교체 (선택된 카페는 오렌지 핀 유지)
+  if (btn) btn.classList.toggle('on', adding);
   const mk = markerByCafe.get(id);
   if (mk && id !== selectedCafeId) mk.setImage(baseImageFor(id));
-  // 리스트가 열려 있으면 하트 상태 갱신
   if (document.getElementById('panel-list').classList.contains('open')) applyFilters(false);
-  persistFavs();
-}
-function persistFavs() {
-  if (!currentUser) return;
-  state.favsByUser[currentUser.id] = {
-    favs: [...favorites].filter(i => i < CAFE_DATA.length),
-    favRids: [...favorites].filter(i => i >= CAFE_DATA.length).map(i => cafes[i]?.rid).filter(Boolean),
-  };
-  saveState();
+
+  const { error } = adding
+    ? await db.from('favorites').insert({ user_id: currentUser.id, cafe_id: id })
+    : await db.from('favorites').delete().eq('user_id', currentUser.id).eq('cafe_id', id);
+  if (error) {
+    if (adding) favorites.delete(id); else favorites.add(id);
+    if (mk && id !== selectedCafeId) mk.setImage(baseImageFor(id));
+    if (btn) btn.classList.toggle('on', favorites.has(id));
+    return toast('찜 처리에 실패했어요');
+  }
+  toast(adding ? '찜 목록에 추가했어요' : '찜을 해제했어요');
 }
 
 /* 로그인/로그아웃 시 현재 계정의 찜으로 교체 (마커 표시 포함) */
-function loadUserFavs() {
-  // 이전 계정의 찜 마커 원복
+async function loadUserFavs() {
   [...favorites].forEach(id => {
     const mk = markerByCafe.get(id);
     if (mk && id !== selectedCafeId) mk.setImage(markerImage);
   });
   favorites.clear();
   if (currentUser) {
-    const fu = state.favsByUser[currentUser.id];
-    if (fu) {
-      (fu.favs || []).forEach(id => { if (cafes[id]) favorites.add(id); });
-      (fu.favRids || []).forEach(rid => {
-        const c = cafes.find(x => x.rid === rid);
-        if (c) favorites.add(c.id);
-      });
-    }
+    const { data } = await db.from('favorites').select('cafe_id').eq('user_id', currentUser.id);
+    (data || []).forEach(r => favorites.add(r.cafe_id));
   }
   [...favorites].forEach(id => {
     const mk = markerByCafe.get(id);
@@ -872,7 +861,7 @@ function renderListItems(filtered, globalCount) {
     <div class="cafe-item" onclick="openDetail(${c.id}, true)"
          onmouseenter="hoverFromList(${c.id})" onmouseleave="scheduleHideLabel()">
       <div class="info">
-        <div class="name">${c.name}${c.reviews.length ? `<span class="inline-rate">★ ${avgRating(c).toFixed(1)} <em>(${c.reviews.length})</em></span>` : ''}</div>
+        <div class="name">${c.name}${c.review_count ? `<span class="inline-rate">★ ${c.avg_stars.toFixed(1)} <em>(${c.review_count})</em></span>` : ''}</div>
         <div class="meta">${c.addr}${refPos ? ` · <span class="dist-tag">${fmtDist(distM(refPos, c))}</span>` : ''}</div>
         ${c.phone ? `<div class="phone">${ic('phone', 11)} ${c.phone}</div>` : ''}
         <span class="chip price">${c.price}</span>${c.mood.slice(0, 2).map(m => `<span class="chip">${m}</span>`).join('')}
@@ -892,13 +881,51 @@ function renderListItems(filtered, globalCount) {
 function starStr(n) { return '★'.repeat(Math.round(n)) + '☆'.repeat(5 - Math.round(n)); }
 function avgRating(c) { return c.reviews.reduce((s, r) => s + r.stars, 0) / (c.reviews.length || 1); }
 
-function openDetail(id, fromList) {
+/* 상세 데이터 로드: 리뷰(작성자 닉네임 포함)·사진·검증 투표 */
+async function loadCafeDetail(c) {
+  const [rv, ph, ck, my] = await Promise.all([
+    db.from('reviews').select('*, profiles(nick)').eq('cafe_id', c.id).order('created_at', { ascending: false }),
+    db.from('cafe_photos').select('url').eq('cafe_id', c.id),
+    db.from('cafe_checks').select('is_correct').eq('cafe_id', c.id),
+    currentUser
+      ? db.from('cafe_checks').select('is_correct').eq('cafe_id', c.id).eq('user_id', currentUser.id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  c.reviews = (rv.data || []).map(r => ({
+    id: r.id,
+    owner: r.author,
+    user: r.profiles?.nick || '알 수 없음',
+    stars: r.stars,
+    text: r.text,
+    moods: r.moods || [],
+    price: r.price || '',
+    photos: r.photos || [],
+    date: (r.created_at || '').slice(0, 10),
+  }));
+  c.review_count = c.reviews.length;
+  c.avg_stars = c.reviews.length
+    ? +(c.reviews.reduce((s, r) => s + r.stars, 0) / c.reviews.length).toFixed(1) : 0;
+  c.photos = (ph.data || []).map(p => p.url);
+  c.checkOk = (ck.data || []).filter(x => x.is_correct).length;
+  c.checkBad = (ck.data || []).filter(x => !x.is_correct).length;
+  c.myCheck = my.data ? my.data.is_correct : null;
+}
+
+function statusBadge(c) {
+  if (c.status === 'verified') return `<span class="vbadge ok">✓ 검증됨</span>`;
+  if (c.status === 'flagged') return `<span class="vbadge bad">정보 확인 필요</span>`;
+  return `<span class="vbadge">검증 대기</span>`;
+}
+
+async function openDetail(id, fromList) {
   cameFromList = !!fromList;
   currentCafe = cafes.find(c => c.id === id);
   if (!currentCafe || currentCafe.deleted) return;
   editingReviewIdx = null;
   closeAllPanels();
   removeTempMarker();
+  await loadCafeDetail(currentCafe);
+  if (currentCafe !== cafes.find(c => c.id === id)) return; // 로드 중 다른 카페로 이동한 경우
 
   // 지도 이동 + 이름표
   if (map) {
@@ -928,8 +955,16 @@ function openDetail(id, fromList) {
     </div>
     <div class="detail-addr">${ic('pin', 13)} ${c.addr}</div>
     ${c.phone ? `<div class="detail-phone">${ic('phone', 13)} <a href="tel:${c.phone.replace(/[^0-9]/g, '')}">${c.phone}</a></div>` : ''}
-    <div><span class="chip price">${c.price}</span>${c.mood.map(m => `<span class="chip">${m}</span>`).join('')}</div>
+    ${c.photos.length ? `<div class="photo-strip">${c.photos.map(u => `<img src="${u}" loading="lazy" onclick="window.open('${u}')">`).join('')}</div>` : ''}
+    <div>${c.price ? `<span class="chip price">${c.price}</span>` : ''}${c.mood.map(m => `<span class="chip">${m}</span>`).join('')}</div>
     ${renderVotes(c)}
+    <div class="check-box">
+      <div class="cb-head">${statusBadge(c)} <span class="cb-q">이 카페 정보가 맞나요?</span></div>
+      <div class="cb-btns">
+        <button class="cb ${c.myCheck === true ? 'on' : ''}" onclick="voteCheck(true)">맞아요 ${c.checkOk || 0}</button>
+        <button class="cb ${c.myCheck === false ? 'on bad' : ''}" onclick="voteCheck(false)">달라요 ${c.checkBad || 0}</button>
+      </div>
+    </div>
     <div class="btn-row">
       <button class="btn review" onclick="toggleReviewForm()">${ic('pencil', 14)} 리뷰 남기기</button>
       <button class="btn route" onclick="openRoute()">${ic('route', 14)} 길찾기</button>
@@ -951,7 +986,9 @@ function openDetail(id, fromList) {
         <option value="₩5,000~7,000">₩5,000~7,000</option>
         <option value="₩7,000~10,000">₩7,000~10,000</option>
       </select>
-      <button class="btn review" style="width:100%; margin-top:10px; height:38px;" onclick="submitReview()">리뷰 등록</button>
+      <div class="fg-title">사진 첨부 (선택, 5MB 이하)</div>
+      <input type="file" id="rv-photos" accept="image/*" multiple style="width:100%; font-size:12.5px;">
+      <button class="btn review" style="width:100%; margin-top:10px; height:38px;" id="rv-submit" onclick="submitReview()">리뷰 등록</button>
     </div>
     <div class="section-title">리뷰 (${c.reviews.length})
       ${c.reviews.length > 1 ? `<span class="review-sort">
@@ -964,13 +1001,25 @@ function openDetail(id, fromList) {
   document.getElementById('panel-detail').classList.add('open');
 }
 
-/* 작성자 표시명: 계정 리뷰는 현재 닉네임을 조회 (닉네임 변경이 과거 리뷰에도 반영) */
-function reviewerName(r) {
-  if (r.owner) {
-    const acc = state.accounts.find(a => a.id === r.owner);
-    if (acc) return acc.nick;
+/* 작성자 표시명 (DB 조인으로 현재 닉네임이 이미 들어옴) */
+function reviewerName(r) { return r.user; }
+
+/* 정보 검증 투표: 맞아요/달라요 (upsert → DB 트리거가 상태 자동 갱신) */
+async function voteCheck(ok) {
+  if (!requireLogin()) return;
+  let reason = null;
+  if (!ok) {
+    reason = await uiAsk({ title: '어떤 정보가 다른가요?', msg: '예: 폐업했어요 / 전화번호가 달라요 / 위치가 달라요', input: '', ok: '제출' });
+    if (reason === null) return;
   }
-  return r.user;
+  const { error } = await db.from('cafe_checks').upsert({
+    user_id: currentUser.id, cafe_id: currentCafe.id, is_correct: ok, reason,
+  });
+  if (error) return toast('의견 등록에 실패했어요');
+  const { data } = await db.from('cafes').select('status').eq('id', currentCafe.id).single();
+  if (data) currentCafe.status = data.status;
+  toast('의견을 반영했어요. 고마워요!');
+  openDetail(currentCafe.id, cameFromList);
 }
 
 let reviewSort = 'latest'; // 'latest' | 'stars'
@@ -995,6 +1044,7 @@ function renderReviews() {
           ? ` <button class="rv-edit" onclick="editMyReview(${i})">수정</button><button class="rv-del" onclick="deleteMyReview(${i})">삭제</button>` : ''}</span>
       </div>
       <p>${r.text}</p>
+      ${r.photos?.length ? `<div class="photo-strip small">${r.photos.map(u => `<img src="${u}" loading="lazy" onclick="window.open('${u}')">`).join('')}</div>` : ''}
     </div>`).join('');
 }
 
@@ -1004,15 +1054,8 @@ async function deleteMyReview(idx) {
   if (!r || !currentUser || r.owner !== currentUser.id) return;
   const ok = await uiAsk({ title: '리뷰 삭제', msg: '내 리뷰를 삭제할까요?', ok: '삭제', danger: true });
   if (!ok) return;
-  currentCafe.reviews.splice(idx, 1);
-  const match = x => !(x.owner === r.owner && x.date === r.date && x.text === r.text);
-  if (currentCafe.id < CAFE_DATA.length) {
-    state.baseReviews[currentCafe.id] = (state.baseReviews[currentCafe.id] || []).filter(match);
-  } else {
-    const rc = state.regCafes.find(x => x.rid === currentCafe.rid);
-    if (rc) rc.reviews = (rc.reviews || []).filter(match);
-  }
-  saveState();
+  const { error } = await db.from('reviews').delete().eq('id', r.id);
+  if (error) return toast('삭제에 실패했어요');
   toast('리뷰를 삭제했어요');
   openDetail(currentCafe.id, cameFromList);
 }
@@ -1076,8 +1119,7 @@ function closeRoadview() { document.getElementById('modal-roadview').classList.r
 /* ===== 장소 공유 링크 ===== */
 function shareCafe() {
   if (!currentCafe) return;
-  const key = currentCafe.id < CAFE_DATA.length ? currentCafe.id : 'r:' + currentCafe.rid;
-  const url = `${location.origin}${location.pathname}?cafe=${encodeURIComponent(key)}`;
+  const url = `${location.origin}${location.pathname}?cafe=${currentCafe.id}`;
   const done = () => toast('링크를 복사했어요. 붙여넣어 공유하세요');
   const fallback = () => {
     const ta = document.createElement('textarea');
@@ -1095,9 +1137,7 @@ function shareCafe() {
 function openSharedCafe() {
   const key = new URLSearchParams(location.search).get('cafe');
   if (!key) return false;
-  const target = key.startsWith('r:')
-    ? cafes.find(c => c.rid === key.slice(2))
-    : cafes.find(c => c.id === +key && c.id < CAFE_DATA.length);
+  const target = cafes.find(c => c.id === +key);
   if (!target || target.deleted) return false;
   setTimeout(() => openDetail(target.id, false), 400);
   return true;
@@ -1158,65 +1198,63 @@ function editMyReview(idx) {
   document.getElementById('rv-price').value = r.price || '';
   f.scrollIntoView({ block: 'center' });
 }
-function persistReviewUpdate(oldR, newR) {
-  const swap = arr => arr.map(x =>
-    (x.owner === oldR.owner && x.date === oldR.date && x.text === oldR.text) ? newR : x);
-  if (currentCafe.id < CAFE_DATA.length) {
-    state.baseReviews[currentCafe.id] = swap(state.baseReviews[currentCafe.id] || []);
-  } else {
-    const rc = state.regCafes.find(x => x.rid === currentCafe.rid);
-    if (rc) rc.reviews = swap(rc.reviews || []);
+/* 사진 업로드 → 공개 URL 배열 */
+async function uploadPhotos(bucket, files, keyPrefix) {
+  const urls = [];
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    if (f.size > 5 * 1024 * 1024) throw new Error(`'${f.name}'이(가) 5MB를 넘어요`);
+    const ext = (f.name.split('.').pop() || 'jpg').toLowerCase();
+    const path = `${keyPrefix}/${Date.now()}_${i}.${ext}`;
+    const { error } = await db.storage.from(bucket).upload(path, f);
+    if (error) throw error;
+    urls.push(db.storage.from(bucket).getPublicUrl(path).data.publicUrl);
   }
-  saveState();
+  return urls;
 }
 
-function submitReview() {
+async function submitReview() {
   if (!requireLogin()) return;
   const text = document.getElementById('review-text').value.trim();
   if (!selectedStars) return toast('별점을 선택해 주세요');
   if (!text) return toast('리뷰 내용을 입력해 주세요');
+  const moods = [...document.querySelectorAll('#rv-moods .fchip.on')].map(t => t.textContent);
+  const price = document.getElementById('rv-price').value;
+  const files = [...(document.getElementById('rv-photos')?.files || [])];
 
-  // 수정 모드
-  if (editingReviewIdx !== null) {
-    const old = currentCafe.reviews[editingReviewIdx];
-    const updated = {
-      ...old,
-      stars: selectedStars,
-      text,
-      moods: [...document.querySelectorAll('#rv-moods .fchip.on')].map(t => t.textContent),
-      price: document.getElementById('rv-price').value,
-    };
-    currentCafe.reviews[editingReviewIdx] = updated;
-    persistReviewUpdate(old, updated);
-    editingReviewIdx = null;
-    toast('리뷰를 수정했어요');
+  const btn = document.getElementById('rv-submit');
+  if (btn) { btn.disabled = true; btn.textContent = files.length ? '사진 업로드 중...' : '등록 중...'; }
+  try {
+    let photos = [];
+    if (files.length) {
+      photos = await uploadPhotos('review-photos', files, `${currentCafe.id}/${currentUser.id}`);
+    }
+    if (editingReviewIdx !== null) {
+      // 수정 모드
+      const old = currentCafe.reviews[editingReviewIdx];
+      const patch = { stars: selectedStars, text, moods, price };
+      if (photos.length) patch.photos = [...(old.photos || []), ...photos];
+      const { error } = await db.from('reviews').update(patch).eq('id', old.id);
+      if (error) throw error;
+      editingReviewIdx = null;
+      toast('리뷰를 수정했어요');
+    } else {
+      const { error } = await db.from('reviews').insert({
+        cafe_id: currentCafe.id, author: currentUser.id,
+        stars: selectedStars, text, moods, price, photos,
+      });
+      if (error) {
+        if (error.code === '23505') throw new Error('이미 리뷰를 남긴 카페예요');
+        throw error;
+      }
+      toast('리뷰가 등록되었습니다!');
+    }
     openDetail(currentCafe.id, cameFromList);
-    return;
+  } catch (e) {
+    toast(e.message && e.message.length < 60 ? e.message : '리뷰 저장에 실패했어요');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '리뷰 등록'; }
   }
-
-  const review = {
-    user: currentUser.nick,
-    owner: currentUser.id, // 내 리뷰 식별용
-    stars: selectedStars,
-    date: new Date().toISOString().slice(0, 10),
-    text,
-    moods: [...document.querySelectorAll('#rv-moods .fchip.on')].map(t => t.textContent),
-    price: document.getElementById('rv-price').value,
-  };
-  currentCafe.reviews.unshift(review);
-  persistReview(currentCafe, review);
-  toast('리뷰가 등록되었습니다! 리뷰 혜택 쿠폰이 지급됐어요');
-  openDetail(currentCafe.id, cameFromList);
-}
-/* 리뷰 저장: 기본 카페는 baseReviews, 등록 카페는 regCafes 안에 */
-function persistReview(cafe, review) {
-  if (cafe.id < CAFE_DATA.length) {
-    state.baseReviews[cafe.id] = [review, ...(state.baseReviews[cafe.id] || [])];
-  } else {
-    const rc = state.regCafes.find(r => r.rid === cafe.rid);
-    if (rc) rc.reviews = [review, ...(rc.reviews || [])];
-  }
-  saveState();
 }
 
 /* ===== 카페 등록 ===== */
@@ -1260,59 +1298,73 @@ function confirmRegister() {
   document.getElementById('modal-confirm').classList.add('open');
 }
 
-function doRegister() {
+async function doRegister() {
   const name = document.getElementById('reg-name').value.trim();
   const phone = document.getElementById('reg-phone').value.trim();
   const tags = [...document.querySelectorAll('#reg-tags .tp.on')].map(t => t.textContent);
   const price = document.getElementById('reg-price').value;
   const addr = document.getElementById('reg-addr').value.trim();
+  const files = [...(document.getElementById('reg-photos')?.files || [])];
 
-  // === 수정 모드 ===
-  if (editingCafeId !== null) {
-    const cafe = cafes.find(c => c.id === editingCafeId);
-    Object.assign(cafe, { name, addr, price, mood: tags });
-    if (phone) cafe.phone = phone; else delete cafe.phone;
-    const rc = state.regCafes.find(r => r.rid === cafe.rid);
-    if (rc) Object.assign(rc, { name, addr, price, mood: tags, phone: phone || undefined });
-    saveState();
+  const btn = document.getElementById('reg-submit');
+  if (btn) { btn.disabled = true; btn.textContent = '저장 중...'; }
+  try {
+    // === 수정 모드 ===
+    if (editingCafeId !== null) {
+      const cafe = cafes.find(c => c.id === editingCafeId);
+      const { error } = await db.from('cafes').update({
+        name, addr, phone: phone || null, price: price || null, moods: tags,
+      }).eq('id', cafe.id);
+      if (error) throw error;
+      Object.assign(cafe, { name, addr, price, mood: tags });
+      if (phone) cafe.phone = phone; else delete cafe.phone;
+      if (files.length) {
+        const urls = await uploadPhotos('cafe-photos', files, String(cafe.id));
+        await db.from('cafe_photos').insert(urls.map(u => ({ cafe_id: cafe.id, url: u, uploader: currentUser.id })));
+      }
+      closePanel('panel-register');
+      editingCafeId = null;
+      toast(`'${name}' 정보가 수정되었습니다`);
+      openDetail(cafe.id, false);
+      return;
+    }
+
+    // === 신규 등록 ===
+    const { data: row, error } = await db.from('cafes').insert({
+      name, addr,
+      phone: phone || null,
+      lat: pendingPos ? pendingPos.lat : 35.858,
+      lng: pendingPos ? pendingPos.lng : 128.55,
+      price: price || null,
+      moods: tags,
+      owner: currentUser.id,
+    }).select().single();
+    if (error) throw error;
+
+    if (files.length) {
+      const urls = await uploadPhotos('cafe-photos', files, String(row.id));
+      await db.from('cafe_photos').insert(urls.map(u => ({ cafe_id: row.id, url: u, uploader: currentUser.id })));
+    }
+
+    const cafe = cafeFromRow({ ...row, review_count: 0, avg_stars: null, moods: tags });
+    cafes.push(cafe);
+    if (map) clusterer.addMarker(addCafeMarker(cafe));
+
+    closeModal('modal-confirm');
     closePanel('panel-register');
-    editingCafeId = null;
-    toast(`'${name}' 정보가 수정되었습니다`);
+    removeTempMarker();
+    document.getElementById('reg-name').value = '';
+    document.getElementById('reg-phone').value = '';
+    if (document.getElementById('reg-photos')) document.getElementById('reg-photos').value = '';
+    document.querySelectorAll('#reg-tags .tp').forEach(t => t.classList.remove('on'));
+    toast(`'${name}' 카페가 등록되었습니다!`);
     openDetail(cafe.id, false);
-    return;
+  } catch (e) {
+    closeModal('modal-confirm');
+    toast(e.message && e.message.length < 60 ? e.message : '등록에 실패했어요');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = editingCafeId !== null ? '수정 저장' : '등록하기'; }
   }
-
-  // === 신규 등록 ===
-  const cafe = {
-    id: cafes.length,
-    rid: 'r' + Date.now(),
-    owner: currentUser ? currentUser.id : null,
-    name, addr,
-    lat: pendingPos ? pendingPos.lat : 35.858,
-    lng: pendingPos ? pendingPos.lng : 128.55,
-    price,
-    mood: tags,
-    reviews: [],
-  };
-  if (phone) cafe.phone = phone;   // 전화번호는 입력했을 때만 등록
-  cafes.push(cafe);
-
-  // localStorage에 저장
-  const saved = { rid: cafe.rid, owner: cafe.owner, name, addr, lat: cafe.lat, lng: cafe.lng, price, mood: tags, reviews: [] };
-  if (phone) saved.phone = phone;
-  state.regCafes.push(saved);
-  saveState();
-
-  if (map) clusterer.addMarker(addCafeMarker(cafe));
-
-  closeModal('modal-confirm');
-  closePanel('panel-register');
-  removeTempMarker();
-  document.getElementById('reg-name').value = '';
-  document.getElementById('reg-phone').value = '';
-  document.querySelectorAll('#reg-tags .tp').forEach(t => t.classList.remove('on'));
-  toast(`'${name}' 카페가 등록되었습니다!`);
-  openDetail(cafe.id, false);
 }
 
 /* 내가 등록한 카페 수정: 등록 폼을 수정 모드로 열기 */
@@ -1342,12 +1394,12 @@ async function deleteMyCafe(id) {
     ok: '삭제', danger: true,
   });
   if (!ok) return;
+  const { error } = await db.from('cafes').delete().eq('id', id);
+  if (error) return toast('삭제에 실패했어요');
   cafe.deleted = true;
   const marker = markerByCafe.get(id);
   if (marker) { clusterer.removeMarker(marker); markerByCafe.delete(id); }
   favorites.delete(id);
-  state.regCafes = state.regCafes.filter(r => r.rid !== cafe.rid);
-  persistFavs(); // saveState 포함
   renderMyPage();
   toast('카페가 삭제되었습니다');
 }
@@ -1408,7 +1460,7 @@ function renderMyFavs() {
       <div class="myreview" style="cursor:pointer;" onclick="goHome(); openDetail(${c.id}, false);">
         <div class="mr-left"><b>${c.name}</b><p>${c.addr}</p></div>
         <div class="mr-right">
-          ${c.reviews.length ? `<div class="s">★ ${avgRating(c).toFixed(1)}</div>` : ''}
+          ${c.review_count ? `<div class="s">★ ${c.avg_stars.toFixed(1)}</div>` : ''}
           <div class="d">${c.price}</div>
         </div>
       </div>`).join('')
@@ -1420,7 +1472,7 @@ function openSettings() {
 }
 function openSignup() {
   // 이전 입력값 초기화
-  ['signup-id', 'signup-pw', 'signup-nick', 'signup-email'].forEach(id =>
+  ['signup-id', 'signup-pw', 'signup-nick'].forEach(id =>
     document.getElementById(id).value = '');
   document.getElementById('signup-agree').checked = false;
   document.getElementById('modal-signup').classList.add('open');
@@ -1429,20 +1481,19 @@ function openOnboard() { document.getElementById('modal-onboard').classList.add(
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
 /* ===== 마이페이지 ===== */
-/* 내가 쓴 리뷰: 전체 카페에서 내 계정(owner)의 리뷰를 수집 */
-function renderMyReviews() {
-  const mine = [];
-  cafes.forEach(c => {
-    if (c.deleted) return;
-    c.reviews.forEach(r => { if (r.owner === currentUser.id) mine.push({ cafe: c.name, cafeId: c.id, ...r }); });
-  });
-  mine.sort((a, b) => b.date.localeCompare(a.date));
+/* 내가 쓴 리뷰: DB에서 조회 */
+async function renderMyReviews() {
+  const { data } = await db.from('reviews')
+    .select('id, cafe_id, stars, text, created_at, cafes(name)')
+    .eq('author', currentUser.id)
+    .order('created_at', { ascending: false });
+  const mine = data || [];
   document.getElementById('my-review-count').textContent = `(${mine.length}개)`;
   document.getElementById('my-reviews').innerHTML = mine.length
     ? mine.map(r => `
-      <div class="myreview" style="cursor:pointer;" onclick="goHome(); openDetail(${r.cafeId}, false);">
-        <div class="mr-left"><b>${r.cafe}</b><p>${r.text}</p></div>
-        <div class="mr-right"><div class="s">${starStr(r.stars)}</div><div class="d">${r.date}</div></div>
+      <div class="myreview" style="cursor:pointer;" onclick="goHome(); openDetail(${r.cafe_id}, false);">
+        <div class="mr-left"><b>${r.cafes?.name || ''}</b><p>${r.text}</p></div>
+        <div class="mr-right"><div class="s">${starStr(r.stars)}</div><div class="d">${(r.created_at || '').slice(0, 10)}</div></div>
       </div>`).join('')
     : `<div class="no-review">아직 작성한 리뷰가 없어요. 카페에 첫 리뷰를 남겨보세요!</div>`;
 }
@@ -1450,20 +1501,22 @@ async function editNickname() {
   if (!currentUser) return;
   const v = await uiAsk({ title: '닉네임 수정', input: currentUser.nick, ok: '저장' });
   if (typeof v === 'string' && v.trim()) {
+    const { error } = await db.from('profiles').update({ nick: v.trim() }).eq('id', currentUser.id);
+    if (error) return toast('닉네임 변경에 실패했어요');
     currentUser.nick = v.trim();
-    saveState();
     renderMyPage();
     updateAuthUI();
     toast('닉네임이 변경되었습니다');
   }
 }
-function saveInfo() {
+async function saveInfo() {
   if (!currentUser) return;
-  currentUser.nick = document.getElementById('info-nick').value.trim() || currentUser.nick;
-  currentUser.name = document.getElementById('info-name').value.trim();
-  currentUser.email = document.getElementById('info-email').value.trim();
-  currentUser.phone = document.getElementById('info-phone').value.trim();
-  saveState();
+  const nick = document.getElementById('info-nick').value.trim() || currentUser.nick;
+  const name = document.getElementById('info-name').value.trim();
+  const phone = document.getElementById('info-phone').value.trim();
+  const { error } = await db.from('profiles').update({ nick, name, phone }).eq('id', currentUser.id);
+  if (error) return toast('저장에 실패했어요');
+  Object.assign(currentUser, { nick, name, phone });
   renderMyPage();
   updateAuthUI();
   toast('회원정보가 저장되었습니다');
@@ -1527,29 +1580,12 @@ document.addEventListener('keydown', e => {
   removeTempMarker();
 });
 
-/* ===== 저장된 데이터 복원 (지도 초기화 전에 실행) ===== */
-(function restoreState() {
-  // 기본 카페에 남긴 내 리뷰
-  Object.entries(state.baseReviews).forEach(([id, arr]) => {
-    const c = cafes[+id];
-    if (c) c.reviews.unshift(...arr);
-  });
-  // 내가 등록한 카페
-  state.regCafes.forEach(rc => {
-    const cafe = {
-      id: cafes.length, rid: rc.rid, owner: rc.owner,
-      name: rc.name, addr: rc.addr, lat: rc.lat, lng: rc.lng,
-      price: rc.price, mood: rc.mood || [], reviews: rc.reviews || [],
-    };
-    if (rc.phone) cafe.phone = rc.phone;
-    cafes.push(cafe);
-  });
-  // 찜: 복원된 세션 계정의 것만 (마커 생성 전이라 Set만 채움 — 마커는 baseImageFor로 반영됨)
-  loadUserFavs();
-  // 온보딩은 최초 1회만
+/* ===== 부트: 세션 복원 → 카페·찜 로드 → 지도 시작 ===== */
+(async function boot() {
   if (state.seenOnboard) document.getElementById('modal-onboard').classList.remove('open');
   renderStaticIcons(); // <i data-ic> 자리에 SVG 아이콘 렌더
   updateAuthUI();
+  await initAuth();                      // Supabase 세션 복원
+  await Promise.all([fetchCafes(), loadUserFavs()]);
+  loadKakaoSdk();                        // initMap이 로드된 cafes로 마커 생성
 })();
-
-loadKakaoSdk();
