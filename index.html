@@ -406,6 +406,89 @@
   .btn.rv { background: #fff; color: #6b6259; border: 1px solid #e2d8ca; }
   .btn.rv:hover { background: var(--cream); }
 
+  /* 소셜 로그인 버튼 */
+  .social-list { display: flex; flex-direction: column; gap: 8px; }
+  .social-btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; height: 44px; border-radius: 10px; cursor: pointer;
+    font-size: 14px; font-weight: 700; border: 1px solid transparent;
+    transition: filter .15s;
+  }
+  .social-btn:hover { filter: brightness(.96); }
+  .social-btn .sicon { width: 18px; height: 18px; flex-shrink: 0; }
+  .social-btn.google { background: #fff; border-color: #dadce0; color: #3c4043; }
+  .social-btn.kakao { background: #fee500; color: #191600; }
+  .social-btn.naver { background: #03c75a; color: #fff; }
+  .social-btn.apple { background: #000; color: #fff; }
+  .auth-divider {
+    display: flex; align-items: center; gap: 10px; margin: 16px 0 14px;
+    font-size: 12px; color: #a39a8e;
+  }
+  .auth-divider::before, .auth-divider::after {
+    content: ''; flex: 1; height: 1px; background: #f0e9df;
+  }
+
+  /* 설정 페이지 */
+  .set-group { margin-bottom: 22px; }
+  .set-group h3 {
+    font-size: 12px; font-weight: 800; color: #a08a72; letter-spacing: .02em;
+    margin: 0 4px 8px; text-transform: uppercase;
+  }
+  .set-card { background: #fff; border-radius: 14px; overflow: hidden; box-shadow: 0 2px 6px rgba(75,54,33,.06); }
+  .set-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 18px; border-bottom: 1px solid #f6f0e7; font-size: 14.5px; color: #3d362e;
+  }
+  .set-row:last-child { border-bottom: none; }
+  .set-row.tappable { cursor: pointer; }
+  .set-row.tappable:hover { background: #fffaf3; }
+  .set-row .sr-label { display: flex; align-items: center; gap: 10px; }
+  .set-row .sr-desc { font-size: 12px; color: #a39a8e; margin-top: 2px; }
+  .set-row .sr-value { font-size: 13px; color: #8a7f73; display: flex; align-items: center; gap: 6px; }
+  .set-row.danger { color: #c92a2a; }
+
+  /* 세그먼트 선택 */
+  .seg { display: flex; background: #f4efe7; border-radius: 9px; padding: 3px; gap: 2px; }
+  .seg button {
+    border: none; background: transparent; border-radius: 7px; cursor: pointer;
+    font-size: 12.5px; padding: 6px 11px; color: #8a7f73; font-weight: 600;
+  }
+  .seg button.on { background: #fff; color: var(--brown-dark); box-shadow: 0 1px 3px rgba(75,54,33,.14); }
+
+  /* 토글 스위치 */
+  .switch { position: relative; width: 44px; height: 26px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .track {
+    position: absolute; inset: 0; background: #ded4c6; border-radius: 13px;
+    cursor: pointer; transition: background .18s;
+  }
+  .switch .track::before {
+    content: ''; position: absolute; width: 20px; height: 20px; left: 3px; top: 3px;
+    background: #fff; border-radius: 50%; transition: transform .18s;
+    box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  }
+  .switch input:checked + .track { background: var(--brown); }
+  .switch input:checked + .track::before { transform: translateX(18px); }
+
+  /* 마이페이지 활동 요약 */
+  .stat-row { display: flex; gap: 10px; margin-top: 14px; }
+  .stat {
+    flex: 1; background: #fff; border-radius: 14px; padding: 16px 12px; text-align: center;
+    box-shadow: 0 2px 6px rgba(75,54,33,.06); cursor: pointer; transition: background .15s;
+  }
+  .stat:hover { background: #fffaf3; }
+  .stat .sv { font-size: 21px; font-weight: 800; color: var(--brown-dark); }
+  .stat .sl { font-size: 12px; color: #8a7f73; margin-top: 3px; }
+
+  /* 아바타 업로드 */
+  .avatar-wrap { position: relative; cursor: pointer; }
+  .avatar-wrap img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; display: block; }
+  .avatar-edit {
+    position: absolute; right: -2px; bottom: -2px; width: 24px; height: 24px;
+    background: #fff; border: 1px solid #e2d8ca; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; color: #6b6259;
+  }
+
   /* 사진 스트립 (카페/리뷰 사진) */
   .photo-strip {
     display: flex; gap: 6px; overflow-x: auto; margin: 10px 0 4px;
@@ -741,40 +824,66 @@
     <!-- 회원 화면 -->
     <div id="my-member">
       <div class="profile-card">
-        <div class="avatar" id="my-avatar">C</div>
+        <div class="avatar-wrap" onclick="document.getElementById('avatar-file').click()" title="프로필 사진 변경">
+          <div class="avatar" id="my-avatar">C</div>
+          <span class="avatar-edit"><i data-ic="pencil" data-size="11"></i></span>
+        </div>
+        <input type="file" id="avatar-file" accept="image/*" style="display:none" onchange="uploadAvatar(this)">
         <div>
           <div class="profile-name">
             <span id="my-nickname">커피러버</span>
             <span class="pencil" title="닉네임 수정" onclick="editNickname()"><i data-ic="pencil" data-size="14"></i></span>
           </div>
           <div class="profile-email" id="my-email">test@cafemap.demo</div>
+          <div class="profile-email" id="my-provider" style="margin-top:2px;"></div>
+        </div>
+      </div>
+
+      <!-- 활동 요약 -->
+      <div class="stat-row">
+        <div class="stat" onclick="scrollToCard('card-reviews')">
+          <div class="sv" id="stat-reviews">0</div><div class="sl">작성한 리뷰</div>
+        </div>
+        <div class="stat" onclick="scrollToCard('card-favs')">
+          <div class="sv" id="stat-favs">0</div><div class="sl">찜한 카페</div>
+        </div>
+        <div class="stat" onclick="scrollToCard('card-cafes')">
+          <div class="sv" id="stat-cafes">0</div><div class="sl">등록한 카페</div>
+        </div>
+        <div class="stat" onclick="scrollToCard('card-checks')">
+          <div class="sv" id="stat-checks">0</div><div class="sl">검증 참여</div>
         </div>
       </div>
 
       <div class="card">
         <h3>회원정보 수정</h3>
         <table class="info-table">
-          <tr><th>닉네임</th><td><input id="info-nick" value="커피러버"></td></tr>
-          <tr><th>이름</th><td><input id="info-name" value="김아만"></td></tr>
-          <tr><th>이메일</th><td><input id="info-email" value="test@cafemap.demo"></td></tr>
-          <tr><th>전화번호</th><td><input id="info-phone" value="010-1234-5678"></td></tr>
+          <tr><th>닉네임</th><td><input id="info-nick" maxlength="20"></td></tr>
+          <tr><th>이름</th><td><input id="info-name" placeholder="선택"></td></tr>
+          <tr><th>이메일</th><td><input id="info-email" disabled style="background:#f7f3ed; color:#a39a8e;"></td></tr>
+          <tr><th>전화번호</th><td><input id="info-phone" placeholder="010-0000-0000"></td></tr>
         </table>
         <button class="save-btn" onclick="saveInfo()">저장하기</button>
       </div>
 
-      <div class="card">
+      <div class="card" id="card-favs">
         <h3><i data-ic="heart" data-size="15"></i> 찜한 카페 <small style="color:#a39a8e; font-weight:400;" id="my-fav-count"></small></h3>
         <div id="my-favs"></div>
       </div>
 
-      <div class="card">
+      <div class="card" id="card-cafes">
         <h3><i data-ic="pin" data-size="15"></i> 내가 등록한 카페 <small style="color:#a39a8e; font-weight:400;" id="my-cafe-count"></small></h3>
         <div id="my-cafes"></div>
       </div>
 
-      <div class="card">
-        <h3>내가 작성한 리뷰 <small style="color:#a39a8e; font-weight:400;" id="my-review-count"></small></h3>
+      <div class="card" id="card-reviews">
+        <h3><i data-ic="pencil" data-size="15"></i> 내가 작성한 리뷰 <small style="color:#a39a8e; font-weight:400;" id="my-review-count"></small></h3>
         <div id="my-reviews"></div>
+      </div>
+
+      <div class="card" id="card-checks">
+        <h3><i data-ic="chart" data-size="15"></i> 내가 검증에 참여한 카페 <small style="color:#a39a8e; font-weight:400;" id="my-check-count"></small></h3>
+        <div id="my-checks"></div>
       </div>
     </div>
   </div>
@@ -784,20 +893,92 @@
 <div class="fullpage" id="page-settings">
   <div class="fullpage-inner">
     <div class="fp-title"><button class="back-btn" onclick="goHome()">←</button> 설정</div>
-    <div class="settings-item" id="settings-auth" onclick="handleAuthItem()">
-      <span><i data-ic="key" data-size="15"></i> 로그인</span><small>테스트 계정: test@cafemap.app / test1234 ›</small>
+
+    <!-- 지도 -->
+    <div class="set-group">
+      <h3>지도</h3>
+      <div class="set-card">
+        <div class="set-row">
+          <div>
+            <div class="sr-label">앱을 열 때 위치</div>
+            <div class="sr-desc">시작 화면에서 보여줄 지역이에요.</div>
+          </div>
+          <div class="seg" id="seg-startloc">
+            <button data-v="myloc" onclick="setPref('startLoc','myloc')">내 위치</button>
+            <button data-v="daegu" onclick="setPref('startLoc','daegu')">대구 시내</button>
+          </div>
+        </div>
+        <div class="set-row">
+          <div>
+            <div class="sr-label">기본 정렬</div>
+            <div class="sr-desc">카페 목록을 처음 열었을 때 순서예요.</div>
+          </div>
+          <div class="seg" id="seg-sort">
+            <button data-v="default" onclick="setPref('defaultSort','default')">기본순</button>
+            <button data-v="near" onclick="setPref('defaultSort','near')">가까운 순</button>
+          </div>
+        </div>
+        <div class="set-row">
+          <div>
+            <div class="sr-label">찜한 카페 강조</div>
+            <div class="sr-desc">지도에서 찜한 카페를 다른 색으로 표시해요.</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="sw-favhl" onchange="setPref('highlightFavs', this.checked)">
+            <span class="track"></span>
+          </label>
+        </div>
+      </div>
     </div>
-    <div class="settings-item" id="settings-signup" onclick="openSignup()">
-      <span><i data-ic="user" data-size="15"></i> 회원가입</span><small>계정을 만들고 리뷰 혜택을 받아보세요 ›</small>
+
+    <!-- 검색 -->
+    <div class="set-group">
+      <h3>검색</h3>
+      <div class="set-card">
+        <div class="set-row">
+          <div>
+            <div class="sr-label">최근 검색어 저장</div>
+            <div class="sr-desc">검색창에서 최근에 찾은 카페를 다시 보여줘요.</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="sw-recent" onchange="setPref('saveRecent', this.checked)">
+            <span class="track"></span>
+          </label>
+        </div>
+        <div class="set-row tappable" onclick="clearRecentSearches()">
+          <div class="sr-label">최근 검색어 삭제</div>
+          <div class="sr-value" id="recent-count"></div>
+        </div>
+      </div>
     </div>
-    <div class="settings-item" onclick="toast('데모 버전: 알림 설정은 준비 중입니다')">
-      <span><i data-ic="bell" data-size="15"></i> 알림 설정</span><small>›</small>
+
+    <!-- 계정 -->
+    <div class="set-group">
+      <h3>계정</h3>
+      <div class="set-card" id="set-account"></div>
     </div>
-    <div class="settings-item" onclick="toast('추후 중국어·일본어 등 외국어 지원 예정입니다')">
-      <span><i data-ic="globe" data-size="15"></i> 언어</span><small>한국어 ›</small>
-    </div>
-    <div class="settings-item" onclick="openOnboard()">
-      <span><i data-ic="help" data-size="15"></i> 앱 사용법 다시 보기</span><small>›</small>
+
+    <!-- 이용 안내 -->
+    <div class="set-group">
+      <h3>이용 안내</h3>
+      <div class="set-card">
+        <div class="set-row tappable" onclick="openOnboard()">
+          <div class="sr-label"><i data-ic="help" data-size="15"></i> 앱 사용법 다시 보기</div>
+          <div class="sr-value">›</div>
+        </div>
+        <div class="set-row tappable" onclick="showAboutData()">
+          <div class="sr-label"><i data-ic="chart" data-size="15"></i> 카페 정보는 어떻게 만들어지나요?</div>
+          <div class="sr-value">›</div>
+        </div>
+        <div class="set-row">
+          <div class="sr-label"><i data-ic="globe" data-size="15"></i> 언어</div>
+          <div class="sr-value">한국어</div>
+        </div>
+        <div class="set-row">
+          <div class="sr-label">버전</div>
+          <div class="sr-value">1.0.0</div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -841,7 +1022,8 @@
 <div class="modal-back" id="modal-login">
   <div class="modal">
     <h2>로그인</h2>
-    <p style="margin-bottom:14px; font-size:13px; color:#8a7f73;">테스트 계정 → <b>test@cafemap.app</b> / <b>test1234</b></p>
+    <div class="social-list" id="login-social"></div>
+    <div class="auth-divider">또는 이메일로 로그인</div>
     <div class="form-group"><label>이메일</label><input id="login-id" type="email" placeholder="example@email.com"
          onkeydown="if(event.key==='Enter')doLogin()"></div>
     <div class="form-group"><label>비밀번호</label><input id="login-pw" type="password" placeholder="비밀번호"
@@ -853,6 +1035,7 @@
     <p style="text-align:center; font-size:13px; color:#8a7f73; margin-top:14px;">
       아직 계정이 없나요? <a href="#" style="color:var(--accent); font-weight:700;" onclick="closeModal('modal-login'); openSignup(); return false;">회원가입</a>
     </p>
+    <p style="text-align:center; font-size:11.5px; color:#b0a696; margin-top:8px;">테스트 계정 test@cafemap.app / test1234</p>
   </div>
 </div>
 
@@ -860,7 +1043,9 @@
 <div class="modal-back" id="modal-signup">
   <div class="modal">
     <h2>회원가입</h2>
-    <p style="margin-bottom:14px;">가입하면 작성한 리뷰가 저장되고 <b>리뷰 혜택</b>을 받을 수 있어요.</p>
+    <p style="margin-bottom:14px;">가입하면 리뷰·찜·카페 등록을 이용할 수 있어요.</p>
+    <div class="social-list" id="signup-social"></div>
+    <div class="auth-divider">또는 이메일로 가입</div>
     <div class="form-group"><label>이메일 *</label><input id="signup-id" type="email" placeholder="example@email.com"></div>
     <div class="form-group"><label>비밀번호 *</label><input id="signup-pw" type="password" placeholder="비밀번호"></div>
     <div class="form-group"><label>닉네임 *</label><input id="signup-nick" type="text" placeholder="리뷰에 표시될 이름"></div>
@@ -872,6 +1057,25 @@
     <div class="m-actions">
       <button class="m-ok" onclick="doSignup()">가입하기</button>
       <button class="m-cancel" onclick="closeModal('modal-signup')">취소</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 프로필 완성 (간편가입 후 필수 정보 수집) ===== -->
+<div class="modal-back" id="modal-profile">
+  <div class="modal">
+    <h2>가입을 완료해 주세요</h2>
+    <p style="margin-bottom:14px; font-size:13.5px;">서비스 이용에 필요한 정보예요. 닉네임은 리뷰에 표시됩니다.</p>
+    <div class="form-group"><label>닉네임 *</label><input id="pf-nick" type="text" placeholder="리뷰에 표시될 이름" maxlength="20"></div>
+    <div class="form-group"><label>이름</label><input id="pf-name" type="text" placeholder="실명 (선택)"></div>
+    <div class="form-group"><label>전화번호</label><input id="pf-phone" type="tel" placeholder="010-0000-0000 (선택)"></div>
+    <div class="form-group" style="font-size:13px; color:#6b6259;">
+      <label style="font-weight:400; display:flex; align-items:center; gap:6px;">
+        <input id="pf-agree" type="checkbox" style="width:auto;"> 이용약관 및 개인정보처리방침에 동의합니다. *
+      </label>
+    </div>
+    <div class="m-actions">
+      <button class="m-ok" onclick="completeProfile()">시작하기</button>
     </div>
   </div>
 </div>

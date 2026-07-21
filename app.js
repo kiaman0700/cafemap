@@ -64,7 +64,8 @@ const ICONS = {
   minus: '<line x1="5" y1="12" x2="19" y2="12"/>',
   x: '<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>',
   eye: '<path d="M1.5 12S5.5 4.8 12 4.8 22.5 12 22.5 12s-4 7.2-10.5 7.2S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3"/>',
-  share: '<circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><line x1="8.4" y1="10.8" x2="15.6" y2="6.2"/><line x1="8.4" y1="13.2" x2="15.6" y2="17.8"/>',
+  share: '<path d="M12 15.5V3.5"/><path d="M8.5 7 12 3.5 15.5 7"/><path d="M5.5 12.5v6a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-6"/>',
+  link: '<path d="M10.5 13.5a4 4 0 0 0 5.7 0l3-3a4 4 0 1 0-5.7-5.7l-1.5 1.5"/><path d="M13.5 10.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 1 0 5.7 5.7l1.5-1.5"/>',
   chart: '<line x1="5" y1="21" x2="5" y2="13"/><line x1="12" y1="21" x2="12" y2="7"/><line x1="19" y1="21" x2="19" y2="16"/>',
 };
 function ic(name, size = 16) {
@@ -106,16 +107,87 @@ async function initAuth() {
   const { data: { session } } = await db.auth.getSession();
   if (session) await loadProfile(session.user);
   updateAuthUI();
+  renderSocialButtons();
+  // 소셜 로그인 리다이렉트 복귀 감지
+  db.auth.onAuthStateChange(async (event, s) => {
+    if (event === 'SIGNED_IN' && s && (!currentUser || currentUser.id !== s.user.id)) {
+      await loadProfile(s.user);
+      await loadUserFavs();
+      updateAuthUI();
+      if (!currentUser.profileCompleted) openProfileSetup();
+      else toast(`${currentUser.nick}님, 환영해요!`);
+    }
+  });
 }
 async function loadProfile(user) {
   const { data } = await db.from('profiles').select('*').eq('id', user.id).single();
   currentUser = {
     id: user.id,
-    email: user.email,
-    nick: data?.nick || user.email.split('@')[0],
+    email: user.email || '',
+    nick: data?.nick || (user.email || 'user').split('@')[0],
     name: data?.name || '',
     phone: data?.phone || '',
+    avatar: data?.avatar_url || '',
+    provider: data?.provider || 'email',
+    profileCompleted: !!data?.profile_completed,
+    settings: data?.settings || {},
   };
+  applyPrefs();
+}
+
+/* ===== 소셜 로그인 ===== */
+const SOCIAL = [
+  { id: 'google', label: 'Google로 계속하기', cls: 'google',
+    icon: '<svg class="sicon" viewBox="0 0 24 24"><path fill="#4285F4" d="M23 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.2a5.3 5.3 0 0 1-2.3 3.500v2.9h3.7c2.2-2 3.4-5 3.4-8.6z"/><path fill="#34A853" d="M12 23.5c3.1 0 5.7-1 7.6-2.8l-3.7-2.9c-1 .7-2.3 1.1-3.9 1.1-3 0-5.5-2-6.4-4.7H1.8v3a11.5 11.5 0 0 0 10.2 6.3z"/><path fill="#FBBC05" d="M5.6 14.2a6.9 6.9 0 0 1 0-4.4v-3H1.8a11.5 11.5 0 0 0 0 10.4l3.8-3z"/><path fill="#EA4335" d="M12 5.1c1.7 0 3.2.6 4.4 1.7l3.3-3.3A11.5 11.5 0 0 0 1.8 6.8l3.8 3c.9-2.7 3.4-4.7 6.4-4.7z"/></svg>' },
+  { id: 'kakao', label: '카카오로 계속하기', cls: 'kakao',
+    icon: '<svg class="sicon" viewBox="0 0 24 24"><path fill="#191600" d="M12 3C6.9 3 2.8 6.3 2.8 10.3c0 2.6 1.7 4.9 4.3 6.2l-1 3.8c-.1.3.3.6.6.4l4.5-3c.3 0 .5.1.8.1 5.1 0 9.2-3.3 9.2-7.4S17.1 3 12 3z"/></svg>' },
+  { id: 'naver', label: '네이버로 계속하기', cls: 'naver',
+    icon: '<svg class="sicon" viewBox="0 0 24 24"><path fill="#fff" d="M14.2 12.4 9.5 5.5H5v13h4.6v-6.9l4.7 6.9H19v-13h-4.8z"/></svg>' },
+  { id: 'apple', label: 'Apple로 계속하기', cls: 'apple',
+    icon: '<svg class="sicon" viewBox="0 0 24 24"><path fill="#fff" d="M16.4 12.7c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9s-1.8-.9-3-.8c-1.5 0-2.9.9-3.7 2.3-1.6 2.7-.4 6.7 1.1 8.9.8 1.1 1.7 2.3 2.9 2.2 1.2 0 1.6-.7 3-.7s1.8.7 3 .7 2-1.1 2.8-2.2c.9-1.2 1.2-2.4 1.2-2.5 0 0-2.4-.9-2.4-3.5zM14.2 5.9c.6-.8 1-1.9.9-3-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-.9 2.9 1 0 2.1-.5 2.7-1.3z"/></svg>' },
+];
+
+function renderSocialButtons() {
+  const html = SOCIAL.map(s => `
+    <button class="social-btn ${s.cls}" onclick="socialLogin('${s.id}')">${s.icon}${s.label}</button>`).join('');
+  const l = document.getElementById('login-social');
+  const g = document.getElementById('signup-social');
+  if (l) l.innerHTML = html;
+  if (g) g.innerHTML = html;
+}
+
+async function socialLogin(provider) {
+  const { error } = await db.auth.signInWithOAuth({
+    provider,
+    options: { redirectTo: location.origin + location.pathname },
+  });
+  if (error) {
+    const name = { google: 'Google', kakao: '카카오', naver: '네이버', apple: 'Apple' }[provider] || provider;
+    toast(`${name} 로그인이 아직 연결되지 않았어요. 이메일로 가입해 주세요`);
+  }
+}
+
+/* ===== 간편가입 후 필수 정보 수집 ===== */
+function openProfileSetup() {
+  document.getElementById('pf-nick').value = currentUser.nick || '';
+  document.getElementById('pf-name').value = currentUser.name || '';
+  document.getElementById('pf-phone').value = currentUser.phone || '';
+  document.getElementById('pf-agree').checked = false;
+  document.getElementById('modal-profile').classList.add('open');
+}
+async function completeProfile() {
+  const nick = document.getElementById('pf-nick').value.trim();
+  const name = document.getElementById('pf-name').value.trim();
+  const phone = document.getElementById('pf-phone').value.trim();
+  if (!nick) return toast('닉네임을 입력해 주세요');
+  if (!document.getElementById('pf-agree').checked) return toast('이용약관에 동의해 주세요');
+  const { error } = await db.from('profiles')
+    .update({ nick, name, phone, profile_completed: true }).eq('id', currentUser.id);
+  if (error) return toast('저장에 실패했어요');
+  Object.assign(currentUser, { nick, name, phone, profileCompleted: true });
+  closeModal('modal-profile');
+  updateAuthUI();
+  toast(`${nick}님, 환영해요!`);
 }
 
 function openLogin() {
@@ -142,12 +214,12 @@ async function doLogout() {
   await db.auth.signOut();
   currentUser = null;
   favOnly = false; // 찜 필터는 로그인 전용
+  applyPrefs();    // 비로그인 기본 설정으로
   await loadUserFavs();
   updateAuthUI();
   if (document.getElementById('page-my').classList.contains('open')) renderMyPage();
   toast('로그아웃 되었습니다');
 }
-function handleAuthItem() { currentUser ? doLogout() : openLogin(); }
 async function doSignup() {
   const email = document.getElementById('signup-id').value.trim();
   const pw = document.getElementById('signup-pw').value;
@@ -176,20 +248,133 @@ function requireLogin() {
 }
 function updateAuthUI() {
   // 헤더: 비회원은 로그인/회원가입, 회원은 프로필 칩
+  const avatar = currentUser?.avatar
+    ? `<img class="avatar-mini" src="${currentUser.avatar}" style="object-fit:cover">`
+    : `<span class="avatar-mini">${currentUser ? currentUser.nick[0] : ''}</span>`;
   document.getElementById('header-right').innerHTML = currentUser
     ? `<button class="hbtn profile" onclick="openMyPage()" title="마이페이지">
-         <span class="avatar-mini">${currentUser.nick[0]}</span>${currentUser.nick}
+         ${avatar}${currentUser.nick}
        </button>
        <button class="hbtn icon" onclick="openSettings()" title="설정">${ic('gear', 17)}</button>`
     : `<button class="hbtn primary" onclick="openLogin()">로그인</button>
        <button class="hbtn ghost" onclick="openSignup()">회원가입</button>
        <button class="hbtn icon" onclick="openSettings()" title="설정">${ic('gear', 17)}</button>`;
-  // 설정 메뉴
-  document.getElementById('settings-auth').innerHTML = currentUser
-    ? `<span>${ic('logout', 15)} 로그아웃</span><small>${currentUser.nick}님 로그인 중 ›</small>`
-    : `<span>${ic('key', 15)} 로그인</span><small>테스트 계정: test@cafemap.app / test1234 ›</small>`;
-  const signupItem = document.getElementById('settings-signup');
-  if (signupItem) signupItem.style.display = currentUser ? 'none' : 'flex';
+  renderAccountSettings();
+}
+
+/* 설정 > 계정 섹션 (로그인 상태에 따라) */
+function renderAccountSettings() {
+  const box = document.getElementById('set-account');
+  if (!box) return;
+  box.innerHTML = currentUser
+    ? `<div class="set-row">
+         <div>
+           <div class="sr-label">${currentUser.nick}</div>
+           <div class="sr-desc">${currentUser.email || '이메일 미등록'}${currentUser.provider !== 'email' ? ` · ${providerLabel(currentUser.provider)} 계정` : ''}</div>
+         </div>
+         <div class="sr-value"><button class="cb" onclick="openMyPage()">내 정보</button></div>
+       </div>
+       ${currentUser.provider === 'email' ? `
+       <div class="set-row tappable" onclick="changePassword()">
+         <div class="sr-label">비밀번호 변경</div><div class="sr-value">›</div>
+       </div>` : ''}
+       <div class="set-row tappable" onclick="doLogout()">
+         <div class="sr-label">${ic('logout', 15)} 로그아웃</div><div class="sr-value">›</div>
+       </div>
+       <div class="set-row tappable danger" onclick="deleteAccount()">
+         <div class="sr-label">회원 탈퇴</div><div class="sr-value">›</div>
+       </div>`
+    : `<div class="set-row">
+         <div>
+           <div class="sr-label">로그인이 필요해요</div>
+           <div class="sr-desc">리뷰·찜·카페 등록을 이용하려면 로그인하세요.</div>
+         </div>
+         <div class="sr-value"><button class="cb" onclick="openLogin()">로그인</button></div>
+       </div>`;
+}
+function providerLabel(p) {
+  return { google: 'Google', kakao: '카카오', naver: '네이버', apple: 'Apple' }[p] || p;
+}
+
+/* ===== 사용자 설정 (프로필 settings jsonb / 비로그인은 localStorage) ===== */
+const DEFAULT_PREFS = { startLoc: 'myloc', defaultSort: 'default', highlightFavs: true, saveRecent: true };
+let prefs = { ...DEFAULT_PREFS };
+
+function applyPrefs() {
+  const stored = currentUser ? (currentUser.settings || {}) : (state.prefs || {});
+  prefs = { ...DEFAULT_PREFS, ...stored };
+  listSort = prefs.defaultSort;
+  renderPrefsUI();
+}
+function renderPrefsUI() {
+  document.querySelectorAll('#seg-startloc button').forEach(b =>
+    b.classList.toggle('on', b.dataset.v === prefs.startLoc));
+  document.querySelectorAll('#seg-sort button').forEach(b =>
+    b.classList.toggle('on', b.dataset.v === prefs.defaultSort));
+  const fh = document.getElementById('sw-favhl');
+  if (fh) fh.checked = !!prefs.highlightFavs;
+  const sr = document.getElementById('sw-recent');
+  if (sr) sr.checked = !!prefs.saveRecent;
+  const rc = document.getElementById('recent-count');
+  if (rc) rc.textContent = `${(state.recent || []).length}개 ›`;
+}
+async function setPref(key, value) {
+  prefs[key] = value;
+  renderPrefsUI();
+  if (key === 'defaultSort') { listSort = value; applyFilters(); }
+  if (key === 'highlightFavs') refreshFavMarkers();
+  if (currentUser) {
+    currentUser.settings = prefs;
+    await db.from('profiles').update({ settings: prefs }).eq('id', currentUser.id);
+  } else {
+    state.prefs = prefs; saveState();
+  }
+  toast('설정을 저장했어요');
+}
+function refreshFavMarkers() {
+  favorites.forEach(id => {
+    const mk = markerByCafe.get(id);
+    if (mk && id !== selectedCafeId) mk.setImage(baseImageFor(id));
+  });
+}
+function clearRecentSearches() {
+  state.recent = [];
+  saveState();
+  renderPrefsUI();
+  toast('최근 검색어를 삭제했어요');
+}
+async function changePassword() {
+  const pw = await uiAsk({ title: '비밀번호 변경', msg: '새 비밀번호를 입력하세요 (6자 이상)', input: '', ok: '변경' });
+  if (pw === null) return;
+  if (pw.length < 6) return toast('비밀번호는 6자 이상이어야 해요');
+  const { error } = await db.auth.updateUser({ password: pw });
+  toast(error ? '변경에 실패했어요' : '비밀번호를 변경했어요');
+}
+async function deleteAccount() {
+  const ok = await uiAsk({
+    title: '회원 탈퇴',
+    msg: '작성한 리뷰와 찜이 모두 삭제되고 되돌릴 수 없어요.\n정말 탈퇴할까요?',
+    ok: '탈퇴', danger: true,
+  });
+  if (!ok) return;
+  // 내 데이터 정리 후 로그아웃 (계정 레코드 삭제는 서버 권한 필요)
+  await db.from('reviews').delete().eq('author', currentUser.id);
+  await db.from('favorites').delete().eq('user_id', currentUser.id);
+  await db.from('cafe_checks').delete().eq('user_id', currentUser.id);
+  await db.from('profiles').update({ nick: '탈퇴한 사용자', name: null, phone: null, avatar_url: null }).eq('id', currentUser.id);
+  await doLogout();
+  toast('탈퇴 처리되었습니다');
+}
+function showAboutData() {
+  uiAsk({
+    title: '카페 정보는 어떻게 만들어지나요?',
+    msg: '카페맵의 정보는 이용자가 직접 등록하고, 다른 이용자가 확인해 주는 방식으로 쌓입니다.\n\n' +
+         '· 카페 등록: 지도를 우클릭해 그 자리에 카페를 추가할 수 있어요.\n' +
+         '· 정보 검증: 카페 상세에서 [맞아요] / [달라요]로 의견을 남기면, 3명이 확인한 카페는 검증됨으로, 다르다는 의견이 모이면 확인 필요로 표시돼요.\n' +
+         '· 분위기와 가격대: 리뷰를 쓸 때 함께 투표한 결과가 모여 카페의 태그가 됩니다.\n\n' +
+         '현재 지도에 있는 대구 카페들은 서비스를 시작하며 넣어둔 테스트 데이터로, 이용자가 등록한 카페와 똑같이 검증 대상이에요.',
+    ok: '알겠어요',
+  });
 }
 
 /* ===== 공용 확인/입력 모달 (브라우저 prompt·confirm 대체) =====
@@ -268,7 +453,9 @@ const PIN_SVG_FAV = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="
 let markerImage = null;
 let markerImageSelected = null;
 let markerImageFav = null;
-function baseImageFor(id) { return favorites.has(id) ? markerImageFav : markerImage; }
+function baseImageFor(id) {
+  return (prefs.highlightFavs && favorites.has(id)) ? markerImageFav : markerImage;
+}
 
 /* ===== 지도 초기화 ===== */
 function initMap() {
@@ -339,8 +526,8 @@ function initMap() {
   // 최초 검색: 현재(대구 시내) 영역 기준으로 마커 표시
   areaBounds = map.getBounds();
   applyFilters(false);
-  // 공유 링크로 들어왔으면 해당 카페를 열고, 아니면 내 위치 주변으로 시작
-  if (!openSharedCafe()) autoLocate();
+  // 공유 링크 > 설정된 시작 위치 순으로 처리
+  if (!openSharedCafe() && prefs.startLoc !== 'daegu') autoLocate();
 }
 
 /* 카페 1곳의 마커 생성 */
@@ -672,6 +859,7 @@ function renderSuggest() {
 function hideSuggestSoon() { setTimeout(hideSuggestNow, 150); }
 function hideSuggestNow() { document.getElementById('suggest-box').style.display = 'none'; }
 function saveRecent(kw) {
+  if (!prefs.saveRecent) return;
   state.recent = [kw, ...(state.recent || []).filter(k => k !== kw)].slice(0, 5);
   saveState();
 }
@@ -1421,9 +1609,19 @@ function renderMyPage() {
   document.getElementById('my-guest').style.display = guest ? 'block' : 'none';
   document.getElementById('my-member').style.display = guest ? 'none' : 'block';
   if (guest) return;
-  document.getElementById('my-avatar').textContent = currentUser.nick[0];
+  const av = document.getElementById('my-avatar');
+  if (currentUser.avatar) {
+    av.style.backgroundImage = `url(${currentUser.avatar})`;
+    av.style.backgroundSize = 'cover';
+    av.textContent = '';
+  } else {
+    av.style.backgroundImage = '';
+    av.textContent = currentUser.nick[0];
+  }
   document.getElementById('my-nickname').textContent = currentUser.nick;
   document.getElementById('my-email').textContent = currentUser.email || '(이메일 미등록)';
+  document.getElementById('my-provider').textContent =
+    currentUser.provider === 'email' ? '이메일로 가입' : `${providerLabel(currentUser.provider)}로 가입`;
   document.getElementById('info-nick').value = currentUser.nick;
   document.getElementById('info-name').value = currentUser.name || '';
   document.getElementById('info-email').value = currentUser.email || '';
@@ -1431,12 +1629,60 @@ function renderMyPage() {
   renderMyFavs();
   renderMyCafes();
   renderMyReviews();
+  renderMyChecks();
+}
+
+function scrollToCard(id) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* 프로필 사진 업로드 */
+async function uploadAvatar(input) {
+  const f = input.files?.[0];
+  if (!f || !currentUser) return;
+  if (f.size > 2 * 1024 * 1024) return toast('사진은 2MB 이하만 올릴 수 있어요');
+  toast('사진을 올리는 중...');
+  try {
+    const ext = (f.name.split('.').pop() || 'jpg').toLowerCase();
+    const path = `${currentUser.id}/avatar_${Date.now()}.${ext}`;
+    const { error } = await db.storage.from('avatars').upload(path, f, { upsert: true });
+    if (error) throw error;
+    const url = db.storage.from('avatars').getPublicUrl(path).data.publicUrl;
+    await db.from('profiles').update({ avatar_url: url }).eq('id', currentUser.id);
+    currentUser.avatar = url;
+    renderMyPage();
+    updateAuthUI();
+    toast('프로필 사진을 변경했어요');
+  } catch (e) {
+    toast('사진 업로드에 실패했어요');
+  } finally {
+    input.value = '';
+  }
+}
+
+/* 마이페이지: 내가 검증에 참여한 카페 */
+async function renderMyChecks() {
+  const { data } = await db.from('cafe_checks')
+    .select('cafe_id, is_correct, reason, created_at, cafes(name, status)')
+    .eq('user_id', currentUser.id)
+    .order('created_at', { ascending: false });
+  const list = data || [];
+  document.getElementById('my-check-count').textContent = `(${list.length}곳)`;
+  document.getElementById('stat-checks').textContent = list.length;
+  document.getElementById('my-checks').innerHTML = list.length
+    ? list.map(c => `
+      <div class="myreview" style="cursor:pointer;" onclick="goHome(); openDetail(${c.cafe_id}, false);">
+        <div class="mr-left"><b>${c.cafes?.name || ''}</b><p>${c.is_correct ? '정보가 맞다고 확인했어요' : `다르다고 알림${c.reason ? ` · ${c.reason}` : ''}`}</p></div>
+        <div class="mr-right"><div class="d">${(c.created_at || '').slice(0, 10)}</div></div>
+      </div>`).join('')
+    : `<div class="no-review">아직 검증에 참여한 카페가 없어요. 카페 상세에서 정보가 맞는지 알려주세요!</div>`;
 }
 
 /* 마이페이지: 내가 등록한 카페 (수정/삭제) */
 function renderMyCafes() {
   const mine = cafes.filter(c => !c.deleted && c.owner === currentUser.id);
   document.getElementById('my-cafe-count').textContent = `(${mine.length}곳)`;
+  document.getElementById('stat-cafes').textContent = mine.length;
   document.getElementById('my-cafes').innerHTML = mine.length
     ? mine.map(c => `
       <div class="myreview">
@@ -1455,6 +1701,7 @@ function renderMyCafes() {
 function renderMyFavs() {
   const favs = cafes.filter(c => favorites.has(c.id));
   document.getElementById('my-fav-count').textContent = `(${favs.length}곳)`;
+  document.getElementById('stat-favs').textContent = favs.length;
   document.getElementById('my-favs').innerHTML = favs.length
     ? favs.map(c => `
       <div class="myreview" style="cursor:pointer;" onclick="goHome(); openDetail(${c.id}, false);">
@@ -1489,6 +1736,7 @@ async function renderMyReviews() {
     .order('created_at', { ascending: false });
   const mine = data || [];
   document.getElementById('my-review-count').textContent = `(${mine.length}개)`;
+  document.getElementById('stat-reviews').textContent = mine.length;
   document.getElementById('my-reviews').innerHTML = mine.length
     ? mine.map(r => `
       <div class="myreview" style="cursor:pointer;" onclick="goHome(); openDetail(${r.cafe_id}, false);">
@@ -1584,6 +1832,7 @@ document.addEventListener('keydown', e => {
 (async function boot() {
   if (state.seenOnboard) document.getElementById('modal-onboard').classList.remove('open');
   renderStaticIcons(); // <i data-ic> 자리에 SVG 아이콘 렌더
+  applyPrefs();        // 비로그인 기본 설정
   updateAuthUI();
   await initAuth();                      // Supabase 세션 복원
   await Promise.all([fetchCafes(), loadUserFavs()]);
