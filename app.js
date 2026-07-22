@@ -137,8 +137,6 @@ async function loadProfile(user) {
 
 /* ===== 소셜 로그인 ===== */
 const SOCIAL = [
-  { id: 'google', label: 'Google로 계속하기', cls: 'google',
-    icon: '<svg class="sicon" viewBox="0 0 24 24"><path fill="#4285F4" d="M23 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.2a5.3 5.3 0 0 1-2.3 3.500v2.9h3.7c2.2-2 3.4-5 3.4-8.6z"/><path fill="#34A853" d="M12 23.5c3.1 0 5.7-1 7.6-2.8l-3.7-2.9c-1 .7-2.3 1.1-3.9 1.1-3 0-5.5-2-6.4-4.7H1.8v3a11.5 11.5 0 0 0 10.2 6.3z"/><path fill="#FBBC05" d="M5.6 14.2a6.9 6.9 0 0 1 0-4.4v-3H1.8a11.5 11.5 0 0 0 0 10.4l3.8-3z"/><path fill="#EA4335" d="M12 5.1c1.7 0 3.2.6 4.4 1.7l3.3-3.3A11.5 11.5 0 0 0 1.8 6.8l3.8 3c.9-2.7 3.4-4.7 6.4-4.7z"/></svg>' },
   { id: 'kakao', label: '카카오로 계속하기', cls: 'kakao',
     icon: '<svg class="sicon" viewBox="0 0 24 24"><path fill="#191600" d="M12 3C6.9 3 2.8 6.3 2.8 10.3c0 2.6 1.7 4.9 4.3 6.2l-1 3.8c-.1.3.3.6.6.4l4.5-3c.3 0 .5.1.8.1 5.1 0 9.2-3.3 9.2-7.4S17.1 3 12 3z"/></svg>' },
 ];
@@ -158,7 +156,7 @@ async function socialLogin(provider) {
     options: { redirectTo: location.origin + location.pathname },
   });
   if (error) {
-    const name = { google: 'Google', kakao: '카카오' }[provider] || provider;
+    const name = { kakao: '카카오' }[provider] || provider;
     toast(`${name} 로그인이 아직 연결되지 않았어요. 이메일로 가입해 주세요`);
   }
 }
@@ -219,9 +217,12 @@ async function doLogout() {
 async function doSignup() {
   const email = document.getElementById('signup-id').value.trim();
   const pw = document.getElementById('signup-pw').value;
+  const pw2 = document.getElementById('signup-pw2').value;
   const nick = document.getElementById('signup-nick').value.trim();
   if (!email || !pw || !nick) return toast('이메일·비밀번호·닉네임을 모두 입력해 주세요');
   if (pw.length < 6) return toast('비밀번호는 6자 이상이어야 해요');
+  if (pw !== pw2) return toast('비밀번호가 일치하지 않아요');
+  if (emailAvailable === false) return toast('이미 가입된 이메일이에요');
   if (!document.getElementById('signup-agree').checked) return toast('이용약관에 동의해 주세요');
   const { data, error } = await db.auth.signUp({ email, password: pw, options: { data: { nick } } });
   if (error) {
@@ -235,6 +236,61 @@ async function doSignup() {
   if (document.getElementById('page-my').classList.contains('open')) renderMyPage();
   toast(`가입 완료! ${nick}님, 환영해요`);
 }
+/* ===== 회원가입 입력 검증 (실시간 표시) ===== */
+let emailCheckTimer = null;
+let emailAvailable = null; // null=미확인, true=사용 가능, false=중복
+
+function setMsg(id, text, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  el.className = 'field-msg' + (cls ? ' ' + cls : '');
+}
+function setFieldState(inputId, valid) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  el.classList.toggle('valid', valid === true);
+  el.classList.toggle('invalid', valid === false);
+}
+
+function checkEmailDebounced() {
+  const email = document.getElementById('signup-id').value.trim();
+  emailAvailable = null;
+  clearTimeout(emailCheckTimer);
+  if (!email) { setMsg('msg-email', ''); setFieldState('signup-id', null); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    setMsg('msg-email', '이메일 형식이 올바르지 않아요', 'err');
+    setFieldState('signup-id', false);
+    return;
+  }
+  setMsg('msg-email', '사용 가능한지 확인하는 중...', 'wait');
+  setFieldState('signup-id', null);
+  emailCheckTimer = setTimeout(async () => {
+    const { data, error } = await db.rpc('email_exists', { check_email: email });
+    if (error) { setMsg('msg-email', ''); return; }
+    emailAvailable = !data;
+    setMsg('msg-email', data ? '이미 가입된 이메일이에요' : '사용할 수 있는 이메일이에요', data ? 'err' : 'ok');
+    setFieldState('signup-id', !data);
+  }, 450);
+}
+
+function checkPasswords() {
+  const pw = document.getElementById('signup-pw').value;
+  const pw2 = document.getElementById('signup-pw2').value;
+  if (!pw) { setMsg('msg-pw', ''); setFieldState('signup-pw', null); }
+  else if (pw.length < 6) {
+    setMsg('msg-pw', '6자 이상 입력해 주세요', 'err');
+    setFieldState('signup-pw', false);
+  } else {
+    setMsg('msg-pw', '사용할 수 있는 비밀번호예요', 'ok');
+    setFieldState('signup-pw', true);
+  }
+  if (!pw2) { setMsg('msg-pw2', ''); setFieldState('signup-pw2', null); return; }
+  const same = pw === pw2;
+  setMsg('msg-pw2', same ? '비밀번호가 일치해요' : '비밀번호가 일치하지 않아요', same ? 'ok' : 'err');
+  setFieldState('signup-pw2', same);
+}
+
 /* 로그인이 필요한 기능 앞에서 호출 */
 function requireLogin() {
   if (currentUser) return true;
@@ -289,7 +345,7 @@ function renderAccountSettings() {
        </div>`;
 }
 function providerLabel(p) {
-  return { google: 'Google', kakao: '카카오' }[p] || p;
+  return { kakao: '카카오' }[p] || p;
 }
 
 /* ===== 사용자 설정 (프로필 settings jsonb / 비로그인은 localStorage) ===== */
@@ -1159,13 +1215,7 @@ async function openDetail(id, fromList) {
     ${c.photos.length ? `<div class="photo-strip">${c.photos.map(u => `<img src="${u}" loading="lazy" onclick="window.open('${u}')">`).join('')}</div>` : ''}
     <div>${c.price ? `<span class="chip price">${c.price}</span>` : ''}${c.mood.map(m => `<span class="chip">${m}</span>`).join('')}</div>
     ${renderVotes(c)}
-    <div class="check-box">
-      <div class="cb-head">${statusBadge(c)} <span class="cb-q">이 카페 정보가 맞나요?</span></div>
-      <div class="cb-btns">
-        <button class="cb ${c.myCheck === true ? 'on' : ''}" onclick="voteCheck(true)">맞아요 ${c.checkOk || 0}</button>
-        <button class="cb ${c.myCheck === false ? 'on bad' : ''}" onclick="voteCheck(false)">달라요 ${c.checkBad || 0}</button>
-      </div>
-    </div>
+    ${renderCheckBox(c)}
     <div class="btn-row">
       <button class="btn review" onclick="toggleReviewForm()">${ic('pencil', 14)} 리뷰 남기기</button>
       <button class="btn route" onclick="openRoute()">${ic('route', 14)} 길찾기</button>
@@ -1205,22 +1255,87 @@ async function openDetail(id, fromList) {
 /* 작성자 표시명 (DB 조인으로 현재 닉네임이 이미 들어옴) */
 function reviewerName(r) { return r.user; }
 
-/* 정보 검증 투표: 맞아요/달라요 (upsert → DB 트리거가 상태 자동 갱신) */
+/* 정보 검증 투표: 맞아요/달라요 (같은 버튼을 다시 누르면 취소) */
+const CHECK_REASONS = ['폐업했어요', '위치가 달라요', '전화번호가 달라요', '이름이 달라요', '카페가 아니에요'];
+
 async function voteCheck(ok) {
   if (!requireLogin()) return;
+
+  // 같은 의견을 다시 누르면 취소
+  if (currentCafe.myCheck === ok) {
+    const { error } = await db.from('cafe_checks').delete()
+      .eq('user_id', currentUser.id).eq('cafe_id', currentCafe.id);
+    if (error) return toast('취소하지 못했어요');
+    toast('의견을 취소했어요');
+    return refreshCheckState();
+  }
+
   let reason = null;
   if (!ok) {
-    reason = await uiAsk({ title: '어떤 정보가 다른가요?', msg: '예: 폐업했어요 / 전화번호가 달라요 / 위치가 달라요', input: '', ok: '제출' });
-    if (reason === null) return;
+    reason = await pickReason();
+    if (reason === null) return; // 취소
   }
   const { error } = await db.from('cafe_checks').upsert({
     user_id: currentUser.id, cafe_id: currentCafe.id, is_correct: ok, reason,
   });
   if (error) return toast('의견 등록에 실패했어요');
-  const { data } = await db.from('cafes').select('status').eq('id', currentCafe.id).single();
-  if (data) currentCafe.status = data.status;
-  toast('의견을 반영했어요. 고마워요!');
-  openDetail(currentCafe.id, cameFromList);
+  toast(ok ? '정보가 맞다고 알려주셨어요. 고마워요!' : '알려주셔서 고마워요. 다른 이용자에게도 표시할게요');
+  refreshCheckState();
+}
+
+/* 달라요 사유 선택 (직접 입력도 가능) */
+function pickReason() {
+  return new Promise(resolve => {
+    const box = document.getElementById('reason-list');
+    box.innerHTML = CHECK_REASONS.map(r =>
+      `<button class="reason-btn" onclick="reasonDone('${r}')">${r}</button>`).join('');
+    document.getElementById('reason-etc').value = '';
+    document.getElementById('modal-reason').classList.add('open');
+    reasonResolve = resolve;
+  });
+}
+let reasonResolve = null;
+function reasonDone(r) {
+  const etc = document.getElementById('reason-etc').value.trim();
+  const value = r === '__etc__' ? etc : r;
+  if (r === '__etc__' && !etc) return toast('내용을 입력해 주세요');
+  document.getElementById('modal-reason').classList.remove('open');
+  const fn = reasonResolve; reasonResolve = null;
+  if (fn) fn(value);
+}
+function reasonCancel() {
+  document.getElementById('modal-reason').classList.remove('open');
+  const fn = reasonResolve; reasonResolve = null;
+  if (fn) fn(null);
+}
+
+/* 투표 후 상태만 다시 읽어서 화면 갱신 (상세 전체를 다시 열지 않음) */
+async function refreshCheckState() {
+  const id = currentCafe.id;
+  const [ck, my, cf] = await Promise.all([
+    db.from('cafe_checks').select('is_correct').eq('cafe_id', id),
+    db.from('cafe_checks').select('is_correct').eq('cafe_id', id).eq('user_id', currentUser.id).maybeSingle(),
+    db.from('cafes').select('status').eq('id', id).single(),
+  ]);
+  currentCafe.checkOk = (ck.data || []).filter(x => x.is_correct).length;
+  currentCafe.checkBad = (ck.data || []).filter(x => !x.is_correct).length;
+  currentCafe.myCheck = my.data ? my.data.is_correct : null;
+  if (cf.data) currentCafe.status = cf.data.status;
+  const box = document.querySelector('.check-box');
+  if (box) box.outerHTML = renderCheckBox(currentCafe);
+}
+
+function renderCheckBox(c) {
+  return `
+    <div class="check-box">
+      <div class="cb-head">${statusBadge(c)} <span class="cb-q">이 카페 정보가 맞나요?</span></div>
+      <div class="cb-btns">
+        <button class="cb ${c.myCheck === true ? 'on' : ''}" onclick="voteCheck(true)"
+          title="${c.myCheck === true ? '다시 누르면 취소돼요' : ''}">맞아요 ${c.checkOk || 0}</button>
+        <button class="cb ${c.myCheck === false ? 'on bad' : ''}" onclick="voteCheck(false)"
+          title="${c.myCheck === false ? '다시 누르면 취소돼요' : ''}">달라요 ${c.checkBad || 0}</button>
+      </div>
+    </div>`;
 }
 
 let reviewSort = 'latest'; // 'latest' | 'stars'
@@ -1365,6 +1480,7 @@ function updateRouteFrom() {
     fromEl.textContent = '내 위치';
     distEl.textContent = `직선거리 약 ${fmtDist(distM(myPos, routeCafe))}`;
     hintEl.textContent = '카카오맵은 이동 수단을 앱 화면에서 선택해 주세요.';
+    updateRouteLinks();
     return;
   }
   fromEl.textContent = '내 위치를 확인하는 중...';
@@ -1373,6 +1489,7 @@ function updateRouteFrom() {
   if (!navigator.geolocation) {
     fromEl.textContent = '위치를 알 수 없어요';
     hintEl.textContent = '출발지는 지도 앱에서 직접 지정해 주세요.';
+    updateRouteLinks();
     return;
   }
   navigator.geolocation.getCurrentPosition(p => {
@@ -1382,6 +1499,7 @@ function updateRouteFrom() {
   }, () => {
     fromEl.textContent = '위치 권한이 꺼져 있어요';
     hintEl.textContent = '허용하면 내 위치에서 출발하는 경로를 열 수 있어요.';
+    updateRouteLinks();
   }, { enableHighAccuracy: true, timeout: 8000 });
 }
 
@@ -1389,29 +1507,29 @@ function setRouteMode(mode) {
   routeMode = mode;
   document.querySelectorAll('#seg-route-mode button').forEach(b =>
     b.classList.toggle('on', b.dataset.v === mode));
+  updateRouteLinks();
 }
 
-function openRouteIn(app) {
+/* 지도 앱 링크 갱신 (window.open은 팝업 차단에 막히므로 실제 링크를 사용) */
+function updateRouteLinks() {
   const c = routeCafe;
   if (!c) return;
   const name = encodeURIComponent(c.name);
-  let url;
 
-  if (app === 'kakao') {
-    // 카카오맵 링크 API: 출발지가 있으면 from/to, 없으면 도착지만
-    // (이동 수단은 링크로 지정할 수 없어 카카오맵 화면에서 선택)
-    url = encodeURI(myPos
-      ? `https://map.kakao.com/link/from/내 위치,${myPos.lat},${myPos.lng}/to/${c.name},${c.lat},${c.lng}`
-      : `https://map.kakao.com/link/to/${c.name},${c.lat},${c.lng}`);
-  } else {
-    // 네이버지도: 좌표 기반 경로 (출발지 없으면 도착지 검색으로)
-    const modeSeg = { car: 'car', transit: 'transit', walk: 'walk' }[routeMode];
-    url = myPos
-      ? `https://map.naver.com/p/directions/${myPos.lng},${myPos.lat},${encodeURIComponent('내 위치')},,/${c.lng},${c.lat},${name},,/-/${modeSeg}`
-      : `https://map.naver.com/p/search/${name}`;
-  }
-  window.open(url, '_blank', 'noopener');
-  closeModal('modal-route');
+  // 카카오맵 링크 API: 출발지가 있으면 from/to, 없으면 도착지만
+  // (이동 수단은 링크로 지정할 수 없어 카카오맵 화면에서 선택)
+  const kakaoUrl = encodeURI(myPos
+    ? `https://map.kakao.com/link/from/내 위치,${myPos.lat},${myPos.lng}/to/${c.name},${c.lat},${c.lng}`
+    : `https://map.kakao.com/link/to/${c.name},${c.lat},${c.lng}`);
+
+  // 네이버지도: 좌표 기반 경로 (출발지 없으면 도착지 검색으로)
+  const modeSeg = { car: 'car', transit: 'transit', walk: 'walk' }[routeMode];
+  const naverUrl = myPos
+    ? `https://map.naver.com/p/directions/${myPos.lng},${myPos.lat},${encodeURIComponent('내 위치')},,/${c.lng},${c.lat},${name},,/-/${modeSeg}`
+    : `https://map.naver.com/p/search/${name}`;
+
+  document.getElementById('route-kakao').href = kakaoUrl;
+  document.getElementById('route-naver').href = naverUrl;
 }
 
 /* 리뷰들의 분위기·가격 투표 집계 */
@@ -1537,6 +1655,8 @@ function openRegister() {
   const addrInput = document.getElementById('reg-addr');
   addrInput.value = '';
   addrInput.placeholder = '주소를 불러오는 중...';
+  document.getElementById('reg-addr-hint').innerHTML =
+    '지도에서 우클릭한 위치의 주소예요. 주소를 고치면 <b>주소 확인</b>을 눌러 위치를 맞춰주세요.';
   // 클릭 좌표 → 주소 자동 입력 (역지오코딩)
   if (geocoder && pendingPos) {
     geocoder.coord2Address(pendingPos.lng, pendingPos.lat, (result, status) => {
@@ -1549,6 +1669,30 @@ function openRegister() {
     });
   }
   document.getElementById('panel-register').classList.add('open');
+}
+
+/* 입력한 주소로 좌표를 맞춤 (주소 기준 등록) */
+function applyAddress() {
+  const addr = document.getElementById('reg-addr').value.trim();
+  const hint = document.getElementById('reg-addr-hint');
+  if (!addr) return toast('주소를 입력해 주세요');
+  if (!geocoder) return toast('지도를 불러온 뒤 이용할 수 있어요');
+  hint.textContent = '주소를 확인하는 중...';
+  geocoder.addressSearch(addr, (result, status) => {
+    if (status !== kakao.maps.services.Status.OK || !result[0]) {
+      hint.innerHTML = '주소를 찾지 못했어요. 도로명 주소로 다시 입력해 보세요.';
+      return;
+    }
+    const p = result[0];
+    pendingPos = { lat: +p.y, lng: +p.x };
+    const pos = new kakao.maps.LatLng(pendingPos.lat, pendingPos.lng);
+    // 등록 위치 핀을 주소 위치로 이동
+    if (tempMarker) tempMarker.setPosition(pos);
+    if (tempOverlay) tempOverlay.setPosition(pos);
+    if (map) map.setCenter(pos);
+    hint.innerHTML = `이 주소의 위치로 등록됩니다: <b>${p.address_name}</b>`;
+    toast('주소 위치로 지도를 옮겼어요');
+  });
 }
 
 function confirmRegister() {
@@ -1613,7 +1757,13 @@ async function doRegister() {
 
     const cafe = cafeFromRow({ ...row, review_count: 0, avg_stars: null, moods: tags });
     cafes.push(cafe);
-    if (map) clusterer.addMarker(addCafeMarker(cafe));
+    if (map) {
+      clusterer.addMarker(addCafeMarker(cafe));
+      // 등록한 카페가 바로 보이도록 그 위치로 이동 후 현재 영역 재검색
+      map.setCenter(new kakao.maps.LatLng(cafe.lat, cafe.lng));
+      if (map.getLevel() > 5) map.setLevel(5);
+      searchThisArea();
+    }
 
     closeModal('modal-confirm');
     closePanel('panel-register');
@@ -1796,8 +1946,13 @@ function openSettings() {
 }
 function openSignup() {
   // 이전 입력값 초기화
-  ['signup-id', 'signup-pw', 'signup-nick'].forEach(id =>
-    document.getElementById(id).value = '');
+  ['signup-id', 'signup-pw', 'signup-pw2', 'signup-nick'].forEach(id => {
+    const el = document.getElementById(id);
+    el.value = '';
+    el.classList.remove('valid', 'invalid');
+  });
+  ['msg-email', 'msg-pw', 'msg-pw2'].forEach(id => setMsg(id, ''));
+  emailAvailable = null;
   document.getElementById('signup-agree').checked = false;
   document.getElementById('modal-signup').classList.add('open');
 }
@@ -1898,6 +2053,7 @@ document.addEventListener('keydown', e => {
   const openModal = document.querySelector('.modal-back.open');
   if (openModal) {
     if (openModal.id === 'modal-ask') return askDone(false); // 취소로 처리
+    if (openModal.id === 'modal-reason') return reasonCancel();
     return openModal.id === 'modal-onboard' ? closeOnboard() : openModal.classList.remove('open');
   }
   if (document.querySelector('.fullpage.open')) return goHome();
