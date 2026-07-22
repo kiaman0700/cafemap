@@ -169,6 +169,12 @@ function openProfileSetup() {
   document.getElementById('pf-agree').checked = false;
   document.getElementById('modal-profile').classList.add('open');
 }
+/* 프로필 설정을 나중으로 미루기 (닫기 버튼) — 필수 정보는 다음에 다시 요청 */
+function skipProfileSetup() {
+  closeModal('modal-profile');
+  toast('마이페이지에서 언제든 정보를 입력할 수 있어요');
+}
+
 async function completeProfile() {
   const nick = document.getElementById('pf-nick').value.trim();
   const name = document.getElementById('pf-name').value.trim();
@@ -2044,6 +2050,19 @@ function toast(msg) {
   window.addEventListener('resize', updateFade);
   updateFade();
 })();
+
+/* 모달 바깥(어두운 배경)을 클릭하면 닫기 */
+document.querySelectorAll('.modal-back').forEach(back => {
+  back.addEventListener('mousedown', e => {
+    if (e.target !== back) return; // 내용 클릭은 무시
+    if (back.id === 'modal-ask') return askDone(false);
+    if (back.id === 'modal-reason') return reasonCancel();
+    if (back.id === 'modal-onboard') return closeOnboard();
+    if (back.id === 'modal-roadview') return closeRoadview();
+    if (back.id === 'modal-profile') return skipProfileSetup();
+    back.classList.remove('open');
+  });
+});
 
 /* ===== ESC로 닫기: 제안 → 모달 → 마이페이지/설정 → 패널 순 ===== */
 document.addEventListener('keydown', e => {

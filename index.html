@@ -626,13 +626,40 @@
   .modal-back {
     position: fixed; inset: 0; background: rgba(46,34,24,.5); z-index: 900;
     display: none; align-items: center; justify-content: center;
+    padding: 20px;
   }
   .modal-back.open { display: flex; }
   .modal {
-    background: #fff; border-radius: 18px; padding: 28px; width: 420px; max-width: 90vw;
-    max-height: 85vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(46,34,24,.32);
+    position: relative;
+    background: #fff; border-radius: 18px; width: 420px; max-width: 100%;
+    max-height: min(85vh, 100%); box-shadow: 0 10px 40px rgba(46,34,24,.32);
+    display: flex; flex-direction: column; overflow: hidden; /* 라운드 모서리 유지 */
   }
-  .modal h2 { font-size: 19px; color: var(--brown-dark); margin-bottom: 12px; }
+  /* 내용만 스크롤 → 스크롤바가 모서리를 각지게 만들지 않음 */
+  .modal-scroll {
+    flex: 1 1 auto; min-height: 0; /* flex 안에서 실제로 줄어들도록 */
+    overflow-y: auto; overscroll-behavior: contain;
+    padding: 28px; scrollbar-gutter: stable;
+  }
+  .modal-scroll::-webkit-scrollbar { width: 10px; }
+  .modal-scroll::-webkit-scrollbar-track { background: transparent; margin: 12px 0; }
+  .modal-scroll::-webkit-scrollbar-thumb {
+    background: #e2d8ca; border-radius: 999px;
+    border: 3px solid #fff; background-clip: padding-box;
+  }
+  .modal-scroll::-webkit-scrollbar-thumb:hover { background: #cfc0aa; background-clip: padding-box; }
+  .modal-scroll { scrollbar-width: thin; scrollbar-color: #e2d8ca transparent; }
+
+  /* 모달 닫기 버튼 */
+  .modal-x {
+    position: absolute; top: 12px; right: 12px; z-index: 2;
+    width: 32px; height: 32px; border-radius: 50%; border: none;
+    background: rgba(255,255,255,.9); color: #8a7f73; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .modal-x:hover { background: #f4efe7; color: #3d362e; }
+
+  .modal h2 { font-size: 19px; color: var(--brown-dark); margin-bottom: 12px; padding-right: 28px; }
   .modal p { font-size: 14px; color: #555; line-height: 1.6; }
   .modal .m-actions { display: flex; gap: 8px; margin-top: 20px; }
   .modal .m-actions button { flex: 1; height: 42px; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; border: none; }
@@ -1018,22 +1045,25 @@
 <!-- ===== 온보딩 팝업 ===== -->
 <div class="modal-back open" id="modal-onboard">
   <div class="modal">
-    <h2>카페맵에 오신 것을 환영해요!</h2>
-    <p>내 주변 카페를 <b>가격대와 분위기</b>로 찾고, 직접 등록하고 함께 검증하는 지도예요.</p>
-    <div class="onboard-step">
-      <div class="num"><i data-ic="search" data-size="14"></i></div>
-      <div><b>지도에서 카페 찾기</b><p>마커를 클릭하면 상호명·주소·전화번호를 확인할 수 있어요.</p></div>
-    </div>
-    <div class="onboard-step">
-      <div class="num"><i data-ic="pencil" data-size="14"></i></div>
-      <div><b>카페를 눌러 리뷰 남기기</b><p>상세 화면에서 리뷰 남기기 버튼으로 별점과 후기를 남겨요.</p></div>
-    </div>
-    <div class="onboard-step">
-      <div class="num"><i data-ic="plus" data-size="14"></i></div>
-      <div><b>새 카페 등록하기</b><p>지도를 <b>마우스 오른쪽 버튼</b>으로 클릭하면 그 위치에 카페를 등록할 수 있어요.</p></div>
-    </div>
-    <div class="m-actions">
-      <button class="m-ok" onclick="closeOnboard()">시작하기</button>
+    <button class="modal-x" onclick="closeOnboard()" title="닫기"><svg class="ic" style="width:16px;height:16px" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
+    <div class="modal-scroll">
+      <h2>카페맵에 오신 것을 환영해요!</h2>
+      <p>내 주변 카페를 <b>가격대와 분위기</b>로 찾고, 직접 등록하고 함께 검증하는 지도예요.</p>
+      <div class="onboard-step">
+        <div class="num"><i data-ic="search" data-size="14"></i></div>
+        <div><b>지도에서 카페 찾기</b><p>마커를 클릭하면 상호명·주소·전화번호를 확인할 수 있어요.</p></div>
+      </div>
+      <div class="onboard-step">
+        <div class="num"><i data-ic="pencil" data-size="14"></i></div>
+        <div><b>카페를 눌러 리뷰 남기기</b><p>상세 화면에서 리뷰 남기기 버튼으로 별점과 후기를 남겨요.</p></div>
+      </div>
+      <div class="onboard-step">
+        <div class="num"><i data-ic="plus" data-size="14"></i></div>
+        <div><b>새 카페 등록하기</b><p>지도를 <b>마우스 오른쪽 버튼</b>으로 클릭하면 그 위치에 카페를 등록할 수 있어요.</p></div>
+      </div>
+      <div class="m-actions">
+        <button class="m-ok" onclick="closeOnboard()">시작하기</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1041,11 +1071,14 @@
 <!-- ===== 등록 확인 팝업 ===== -->
 <div class="modal-back" id="modal-confirm">
   <div class="modal">
-    <h2>카페를 등록하시겠습니까?</h2>
-    <p id="confirm-text"></p>
-    <div class="m-actions">
-      <button class="m-ok" onclick="doRegister()">예</button>
-      <button class="m-cancel" onclick="closeModal('modal-confirm')">아니오</button>
+    <button class="modal-x" onclick="closeModal('modal-confirm')" title="닫기"><svg class="ic" style="width:16px;height:16px" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
+    <div class="modal-scroll">
+      <h2>카페를 등록하시겠습니까?</h2>
+      <p id="confirm-text"></p>
+      <div class="m-actions">
+        <button class="m-ok" onclick="doRegister()">예</button>
+        <button class="m-cancel" onclick="closeModal('modal-confirm')">아니오</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1053,61 +1086,67 @@
 <!-- ===== 로그인 팝업 ===== -->
 <div class="modal-back" id="modal-login">
   <div class="modal">
-    <h2>로그인</h2>
-    <div class="social-list" id="login-social"></div>
-    <div class="auth-divider">또는 이메일로 로그인</div>
-    <div class="form-group"><label>이메일</label><input id="login-id" type="email" placeholder="example@email.com"
-         onkeydown="if(event.key==='Enter')doLogin()"></div>
-    <div class="form-group"><label>비밀번호</label><input id="login-pw" type="password" placeholder="비밀번호"
-         onkeydown="if(event.key==='Enter')doLogin()"></div>
-    <div class="m-actions">
-      <button class="m-ok" onclick="doLogin()">로그인</button>
-      <button class="m-cancel" onclick="closeModal('modal-login')">취소</button>
+    <button class="modal-x" onclick="closeModal('modal-login')" title="닫기"><svg class="ic" style="width:16px;height:16px" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
+    <div class="modal-scroll">
+      <h2>로그인</h2>
+      <div class="social-list" id="login-social"></div>
+      <div class="auth-divider">또는 이메일로 로그인</div>
+      <div class="form-group"><label>이메일</label><input id="login-id" type="email" placeholder="example@email.com"
+           onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <div class="form-group"><label>비밀번호</label><input id="login-pw" type="password" placeholder="비밀번호"
+           onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <div class="m-actions">
+        <button class="m-ok" onclick="doLogin()">로그인</button>
+        <button class="m-cancel" onclick="closeModal('modal-login')">취소</button>
+      </div>
+      <p style="text-align:center; font-size:13px; color:#8a7f73; margin-top:14px;">
+        아직 계정이 없나요? <a href="#" style="color:var(--accent); font-weight:700;" onclick="closeModal('modal-login'); openSignup(); return false;">회원가입</a>
+      </p>
+      <p style="text-align:center; font-size:11.5px; color:#b0a696; margin-top:8px;">테스트 계정 test@cafemap.app / test1234</p>
     </div>
-    <p style="text-align:center; font-size:13px; color:#8a7f73; margin-top:14px;">
-      아직 계정이 없나요? <a href="#" style="color:var(--accent); font-weight:700;" onclick="closeModal('modal-login'); openSignup(); return false;">회원가입</a>
-    </p>
-    <p style="text-align:center; font-size:11.5px; color:#b0a696; margin-top:8px;">테스트 계정 test@cafemap.app / test1234</p>
   </div>
 </div>
 
 <!-- ===== 회원가입 팝업 ===== -->
 <div class="modal-back" id="modal-signup">
   <div class="modal">
-    <h2>회원가입</h2>
-    <p style="margin-bottom:14px;">가입하면 리뷰·찜·카페 등록을 이용할 수 있어요.</p>
-    <div class="social-list" id="signup-social"></div>
-    <div class="auth-divider">또는 이메일로 가입</div>
-    <div class="form-group">
-      <label>이메일 *</label>
-      <input id="signup-id" type="email" placeholder="example@email.com" autocomplete="email"
-             oninput="checkEmailDebounced()">
-      <div class="field-msg" id="msg-email"></div>
-    </div>
-    <div class="form-group">
-      <label>비밀번호 *</label>
-      <input id="signup-pw" type="password" placeholder="6자 이상" autocomplete="new-password"
-             oninput="checkPasswords()">
-      <div class="field-msg" id="msg-pw"></div>
-    </div>
-    <div class="form-group">
-      <label>비밀번호 확인 *</label>
-      <input id="signup-pw2" type="password" placeholder="비밀번호를 한 번 더 입력하세요" autocomplete="new-password"
-             oninput="checkPasswords()">
-      <div class="field-msg" id="msg-pw2"></div>
-    </div>
-    <div class="form-group">
-      <label>닉네임 *</label>
-      <input id="signup-nick" type="text" placeholder="리뷰에 표시될 이름" maxlength="20">
-    </div>
-    <div class="form-group" style="font-size:13px; color:#6b6259;">
-      <label style="font-weight:400; display:flex; align-items:center; gap:6px;">
-        <input id="signup-agree" type="checkbox" style="width:auto;"> 이용약관 및 개인정보처리방침에 동의합니다.
-      </label>
-    </div>
-    <div class="m-actions">
-      <button class="m-ok" onclick="doSignup()">가입하기</button>
-      <button class="m-cancel" onclick="closeModal('modal-signup')">취소</button>
+    <button class="modal-x" onclick="closeModal('modal-signup')" title="닫기"><svg class="ic" style="width:16px;height:16px" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
+    <div class="modal-scroll">
+      <h2>회원가입</h2>
+      <p style="margin-bottom:14px;">가입하면 리뷰·찜·카페 등록을 이용할 수 있어요.</p>
+      <div class="social-list" id="signup-social"></div>
+      <div class="auth-divider">또는 이메일로 가입</div>
+      <div class="form-group">
+        <label>이메일 *</label>
+        <input id="signup-id" type="email" placeholder="example@email.com" autocomplete="email"
+               oninput="checkEmailDebounced()">
+        <div class="field-msg" id="msg-email"></div>
+      </div>
+      <div class="form-group">
+        <label>비밀번호 *</label>
+        <input id="signup-pw" type="password" placeholder="6자 이상" autocomplete="new-password"
+               oninput="checkPasswords()">
+        <div class="field-msg" id="msg-pw"></div>
+      </div>
+      <div class="form-group">
+        <label>비밀번호 확인 *</label>
+        <input id="signup-pw2" type="password" placeholder="비밀번호를 한 번 더 입력하세요" autocomplete="new-password"
+               oninput="checkPasswords()">
+        <div class="field-msg" id="msg-pw2"></div>
+      </div>
+      <div class="form-group">
+        <label>닉네임 *</label>
+        <input id="signup-nick" type="text" placeholder="리뷰에 표시될 이름" maxlength="20">
+      </div>
+      <div class="form-group" style="font-size:13px; color:#6b6259;">
+        <label style="font-weight:400; display:flex; align-items:center; gap:6px;">
+          <input id="signup-agree" type="checkbox" style="width:auto;"> 이용약관 및 개인정보처리방침에 동의합니다.
+        </label>
+      </div>
+      <div class="m-actions">
+        <button class="m-ok" onclick="doSignup()">가입하기</button>
+        <button class="m-cancel" onclick="closeModal('modal-signup')">취소</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1115,18 +1154,21 @@
 <!-- ===== 프로필 완성 (간편가입 후 필수 정보 수집) ===== -->
 <div class="modal-back" id="modal-profile">
   <div class="modal">
-    <h2>가입을 완료해 주세요</h2>
-    <p style="margin-bottom:14px; font-size:13.5px;">서비스 이용에 필요한 정보예요. 닉네임은 리뷰에 표시됩니다.</p>
-    <div class="form-group"><label>닉네임 *</label><input id="pf-nick" type="text" placeholder="리뷰에 표시될 이름" maxlength="20"></div>
-    <div class="form-group"><label>이름</label><input id="pf-name" type="text" placeholder="실명 (선택)"></div>
-    <div class="form-group"><label>전화번호</label><input id="pf-phone" type="tel" placeholder="010-0000-0000 (선택)"></div>
-    <div class="form-group" style="font-size:13px; color:#6b6259;">
-      <label style="font-weight:400; display:flex; align-items:center; gap:6px;">
-        <input id="pf-agree" type="checkbox" style="width:auto;"> 이용약관 및 개인정보처리방침에 동의합니다. *
-      </label>
-    </div>
-    <div class="m-actions">
-      <button class="m-ok" onclick="completeProfile()">시작하기</button>
+    <button class="modal-x" onclick="skipProfileSetup()" title="닫기"><svg class="ic" style="width:16px;height:16px" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
+    <div class="modal-scroll">
+      <h2>가입을 완료해 주세요</h2>
+      <p style="margin-bottom:14px; font-size:13.5px;">서비스 이용에 필요한 정보예요. 닉네임은 리뷰에 표시됩니다.</p>
+      <div class="form-group"><label>닉네임 *</label><input id="pf-nick" type="text" placeholder="리뷰에 표시될 이름" maxlength="20"></div>
+      <div class="form-group"><label>이름</label><input id="pf-name" type="text" placeholder="실명 (선택)"></div>
+      <div class="form-group"><label>전화번호</label><input id="pf-phone" type="tel" placeholder="010-0000-0000 (선택)"></div>
+      <div class="form-group" style="font-size:13px; color:#6b6259;">
+        <label style="font-weight:400; display:flex; align-items:center; gap:6px;">
+          <input id="pf-agree" type="checkbox" style="width:auto;"> 이용약관 및 개인정보처리방침에 동의합니다. *
+        </label>
+      </div>
+      <div class="m-actions">
+        <button class="m-ok" onclick="completeProfile()">시작하기</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1134,14 +1176,17 @@
 <!-- ===== 공용 확인/입력 모달 (prompt·confirm 대체) ===== -->
 <div class="modal-back" id="modal-ask">
   <div class="modal" style="width:360px;">
-    <h2 id="ask-title" style="font-size:17px;"></h2>
-    <p id="ask-msg" style="white-space:pre-line;"></p>
-    <div class="form-group" id="ask-input-wrap" style="display:none; margin-top:12px;">
-      <input id="ask-input" type="text" onkeydown="if(event.key==='Enter')askDone(true)">
-    </div>
-    <div class="m-actions">
-      <button class="m-ok" id="ask-ok" onclick="askDone(true)">확인</button>
-      <button class="m-cancel" onclick="askDone(false)">취소</button>
+    <button class="modal-x" onclick="askDone(false)" title="닫기"><svg class="ic" style="width:16px;height:16px" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
+    <div class="modal-scroll">
+      <h2 id="ask-title" style="font-size:17px;"></h2>
+      <p id="ask-msg" style="white-space:pre-line;"></p>
+      <div class="form-group" id="ask-input-wrap" style="display:none; margin-top:12px;">
+        <input id="ask-input" type="text" onkeydown="if(event.key==='Enter')askDone(true)">
+      </div>
+      <div class="m-actions">
+        <button class="m-ok" id="ask-ok" onclick="askDone(true)">확인</button>
+        <button class="m-cancel" onclick="askDone(false)">취소</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1149,17 +1194,20 @@
 <!-- ===== 정보가 다른 이유 선택 ===== -->
 <div class="modal-back" id="modal-reason">
   <div class="modal" style="width:360px;">
-    <h2>어떤 정보가 다른가요?</h2>
-    <p style="font-size:13px; margin-bottom:12px;">알려주시면 다른 이용자에게 표시되고, 여러 명이 같은 의견이면 확인 필요로 바뀌어요.</p>
-    <div class="reason-list" id="reason-list"></div>
-    <div class="form-group" style="margin-top:12px;">
-      <label>직접 입력</label>
-      <input id="reason-etc" type="text" placeholder="예: 영업시간이 달라요"
-             onkeydown="if(event.key==='Enter')reasonDone('__etc__')">
-    </div>
-    <div class="m-actions">
-      <button class="m-ok" onclick="reasonDone('__etc__')">직접 입력한 내용으로 제출</button>
-      <button class="m-cancel" onclick="reasonCancel()">취소</button>
+    <button class="modal-x" onclick="reasonCancel()" title="닫기"><svg class="ic" style="width:16px;height:16px" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
+    <div class="modal-scroll">
+      <h2>어떤 정보가 다른가요?</h2>
+      <p style="font-size:13px; margin-bottom:12px;">알려주시면 다른 이용자에게 표시되고, 여러 명이 같은 의견이면 확인 필요로 바뀌어요.</p>
+      <div class="reason-list" id="reason-list"></div>
+      <div class="form-group" style="margin-top:12px;">
+        <label>직접 입력</label>
+        <input id="reason-etc" type="text" placeholder="예: 영업시간이 달라요"
+               onkeydown="if(event.key==='Enter')reasonDone('__etc__')">
+      </div>
+      <div class="m-actions">
+        <button class="m-ok" onclick="reasonDone('__etc__')">직접 입력한 내용으로 제출</button>
+        <button class="m-cancel" onclick="reasonCancel()">취소</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1167,37 +1215,40 @@
 <!-- ===== 길찾기 ===== -->
 <div class="modal-back" id="modal-route">
   <div class="modal" style="width:400px;">
-    <h2>길찾기</h2>
-    <div class="route-path">
-      <div class="rp-row">
-        <span class="rp-dot start"></span>
-        <div class="rp-text" id="route-from">내 위치를 확인하는 중...</div>
+    <button class="modal-x" onclick="closeModal('modal-route')" title="닫기"><svg class="ic" style="width:16px;height:16px" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
+    <div class="modal-scroll">
+      <h2>길찾기</h2>
+      <div class="route-path">
+        <div class="rp-row">
+          <span class="rp-dot start"></span>
+          <div class="rp-text" id="route-from">내 위치를 확인하는 중...</div>
+        </div>
+        <div class="rp-line"></div>
+        <div class="rp-row">
+          <span class="rp-dot end"></span>
+          <div class="rp-text" id="route-to"></div>
+        </div>
       </div>
-      <div class="rp-line"></div>
-      <div class="rp-row">
-        <span class="rp-dot end"></span>
-        <div class="rp-text" id="route-to"></div>
+      <div id="route-dist" class="route-dist"></div>
+  
+      <div class="fg-title">이동 수단</div>
+      <div class="seg" id="seg-route-mode" style="width:100%;">
+        <button data-v="car" onclick="setRouteMode('car')" style="flex:1;">자동차</button>
+        <button data-v="transit" onclick="setRouteMode('transit')" style="flex:1;">대중교통</button>
+        <button data-v="walk" onclick="setRouteMode('walk')" style="flex:1;">도보</button>
       </div>
-    </div>
-    <div id="route-dist" class="route-dist"></div>
-
-    <div class="fg-title">이동 수단</div>
-    <div class="seg" id="seg-route-mode" style="width:100%;">
-      <button data-v="car" onclick="setRouteMode('car')" style="flex:1;">자동차</button>
-      <button data-v="transit" onclick="setRouteMode('transit')" style="flex:1;">대중교통</button>
-      <button data-v="walk" onclick="setRouteMode('walk')" style="flex:1;">도보</button>
-    </div>
-
-    <div class="fg-title">지도 앱에서 열기</div>
-    <div class="social-list">
-      <a class="social-btn naver-map" id="route-naver" href="#" target="_blank" rel="noopener"
-         onclick="closeModal('modal-route')">네이버지도로 길찾기</a>
-      <a class="social-btn kakao" id="route-kakao" href="#" target="_blank" rel="noopener"
-         onclick="closeModal('modal-route')">카카오맵으로 길찾기</a>
-    </div>
-    <p id="route-hint" class="route-hint"></p>
-    <div class="m-actions">
-      <button class="m-cancel" onclick="closeModal('modal-route')">닫기</button>
+  
+      <div class="fg-title">지도 앱에서 열기</div>
+      <div class="social-list">
+        <a class="social-btn naver-map" id="route-naver" href="#" target="_blank" rel="noopener"
+           onclick="closeModal('modal-route')">네이버지도로 길찾기</a>
+        <a class="social-btn kakao" id="route-kakao" href="#" target="_blank" rel="noopener"
+           onclick="closeModal('modal-route')">카카오맵으로 길찾기</a>
+      </div>
+      <p id="route-hint" class="route-hint"></p>
+      <div class="m-actions">
+        <button class="m-cancel" onclick="closeModal('modal-route')">닫기</button>
+      </div>
     </div>
   </div>
 </div>
