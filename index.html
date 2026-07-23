@@ -378,8 +378,9 @@
   .detail-stars { color: #f59f00; font-size: 15px; margin: 4px 0; }
   .detail-stars small { color: #8a7f73; font-size: 12px; }
   .detail-addr { font-size: 13px; color: #6b6259; margin: 6px 0 2px; }
-  .detail-phone { font-size: 14px; margin: 4px 0 10px; }
+  .detail-phone { font-size: 14px; margin: 4px 0 4px; }
   .detail-phone a { color: var(--green); font-weight: 700; text-decoration: none; }
+  .detail-hours { font-size: 13.5px; color: #6b6259; margin: 4px 0 8px; }
   .detail-row { margin: 10px 0; font-size: 14px; color: #555; }
   .btn-row { display: flex; gap: 8px; margin: 14px 0; }
   .btn {
@@ -525,19 +526,21 @@
     border-radius: 6px; background: #f4efe7; color: #8a7f73;
   }
   .vbadge.ok { background: #e7f3ea; color: #2f7d43; }
-  .vbadge.bad { background: #fdeeee; color: #c92a2a; }
+  .vbadge.bad { background: #fff5e6; color: #b26a00; }
+  .vbadge.red { background: #fdeeee; color: #c92a2a; }
   .check-box {
-    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
-    border: 1px solid #f0e9df; border-radius: 10px; padding: 10px 12px; margin: 10px 0;
+    border: 1px solid #f0e9df; border-radius: 12px; padding: 12px; margin: 10px 0;
+    background: #fffdfa;
   }
-  .check-box .reason-summary { flex-basis: 100%; }
-  .cb-head { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
-  .cb-q { font-size: 12.5px; color: #8a7f73; }
-  .cb-btns { display: flex; gap: 6px; }
+  .cb-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .cb-q { font-size: 13px; color: #6b6259; font-weight: 600; }
+  .cb-btns { display: flex; gap: 8px; }
   .cb {
-    border: 1px solid #e2d8ca; border-radius: 8px; background: #fff;
-    font-size: 12px; padding: 5px 10px; cursor: pointer; color: #6b6259;
+    flex: 1; border: 1px solid #e2d8ca; border-radius: 9px; background: #fff;
+    font-size: 13px; font-weight: 700; padding: 9px 8px; cursor: pointer; color: #6b6259;
+    transition: all .12s;
   }
+  .cb:hover { background: var(--cream); border-color: var(--brown); }
   .cb:hover { background: var(--cream); }
   .cb.on { background: var(--brown); border-color: var(--brown); color: #fff; }
   .cb.on.bad { background: #c92a2a; border-color: #c92a2a; }
@@ -550,6 +553,12 @@
     border-radius: 12px; background: #fdeeee; color: #b23b3b;
   }
   .rs-chip b { color: #922; }
+  .rs-fix {
+    border: none; background: #fff; color: var(--brown); cursor: pointer;
+    font-size: 11px; font-weight: 700; margin-left: 6px; padding: 1px 7px;
+    border-radius: 8px; border: 1px solid #e2c9c9;
+  }
+  .rs-fix:hover { background: var(--cream); }
 
   /* 상태 태그: 리스트 이름 옆 */
   .ltag {
@@ -557,21 +566,77 @@
     border-radius: 5px; margin-left: 6px; vertical-align: 1.5px;
   }
   .ltag.ok { background: #e7f3ea; color: #2f7d43; }
-  .ltag.bad { background: #fdeeee; color: #c92a2a; }
+  .ltag.bad { background: #fff5e6; color: #b26a00; }
+  .ltag.red { background: #fdeeee; color: #c92a2a; }
 
   /* 상태 점: 마커 라벨 이름 앞 */
   .sdot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; vertical-align: 1px; }
   .sdot.ok { background: #2f9e44; }
   .sdot.bad { background: #e8a90c; }
+  .sdot.red { background: #c92a2a; }
+
+  /* 정보 신선도 */
+  .info-freshness { font-size: 11.5px; color: #a39a8e; margin: 6px 0 2px; }
+
+  /* 폐업 배너 */
+  .closure-banner {
+    font-size: 12.5px; line-height: 1.5; border-radius: 10px;
+    padding: 9px 12px; margin: 10px 0;
+  }
+  .closure-banner.warn { background: #fff5e6; color: #b26a00; border: 1px solid #ffe0b2; }
+  .closure-banner.closed { background: #fdeeee; color: #b23b3b; border: 1px solid #f5c6c6; }
+
+  /* 정보 수정 제안 버튼 */
+  .btn-edit-info {
+    width: 100%; margin-top: 8px; padding: 10px; border-radius: 10px;
+    border: 1px dashed #d8cbb8; background: #fff; cursor: pointer;
+    font-size: 13px; color: #8a7f73; display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .btn-edit-info:hover { background: var(--cream); border-color: var(--brown); color: var(--brown-dark); }
+  #edit-fields select, #edit-fields input {
+    width: 100%; border: 1px solid #e2d8ca; border-radius: 8px; padding: 9px 10px; font-size: 14px;
+  }
 
   /* 달라요 사유 선택 */
-  .reason-list { display: flex; flex-direction: column; gap: 6px; }
+  .reason-list { display: flex; flex-direction: column; gap: 7px; }
   .reason-btn {
-    width: 100%; text-align: left; padding: 12px 14px; border-radius: 10px;
-    border: 1px solid #e2d8ca; background: #fff; cursor: pointer;
-    font-size: 14px; color: #3d362e;
+    width: 100%; text-align: left; padding: 13px 15px; border-radius: 11px;
+    border: 1px solid #ece3d5; background: #fff; cursor: pointer;
+    font-size: 14px; color: #3d362e; font-weight: 500; transition: all .12s;
+    display: flex; align-items: center; justify-content: space-between;
   }
+  .reason-btn::after { content: '›'; color: #cbbfac; font-size: 16px; }
   .reason-btn:hover { background: var(--cream); border-color: var(--brown); }
+  .reason-btn:hover::after { color: var(--brown); }
+  /* 직접 입력 행 */
+  .reason-etc-row { display: flex; gap: 7px; margin: 12px 0 4px; }
+  .reason-etc-row input {
+    flex: 1; min-width: 0; border: 1px solid #e2d8ca; border-radius: 10px;
+    padding: 11px 13px; font-size: 13.5px; outline: none;
+  }
+  .reason-etc-row input:focus { border-color: var(--brown); box-shadow: 0 0 0 3px rgba(111,78,55,.1); }
+  .reason-etc-btn {
+    flex-shrink: 0; border: none; background: var(--brown); color: #fff;
+    border-radius: 10px; padding: 0 16px; font-size: 13.5px; font-weight: 700; cursor: pointer;
+  }
+  .reason-etc-btn:hover { background: var(--brown-dark); }
+  .reason-cancel {
+    width: 100%; margin-top: 10px; border: none; background: transparent;
+    color: #8a7f73; font-size: 13.5px; padding: 8px; cursor: pointer;
+  }
+  .reason-cancel:hover { color: #3d362e; }
+
+  /* 정보 수정 모달 헤더 */
+  .edit-target {
+    display: flex; align-items: center; gap: 7px; font-size: 15px; font-weight: 800;
+    color: var(--brown-dark); margin: 2px 0 8px;
+  }
+  .edit-target .et-icon { color: var(--accent); display: inline-flex; }
+  .edit-help {
+    font-size: 12.5px; color: #8a7f73; line-height: 1.5;
+    background: #faf5ee; border-radius: 10px; padding: 9px 12px; margin-bottom: 14px;
+  }
+  #edit-fields .form-group label { font-size: 12.5px; color: #8a7f73; }
 
   /* 로드뷰 안 카페 이름표 */
   .rv-cafe-tag {
@@ -689,6 +754,8 @@
   .m-ok { background: var(--brown); color: #fff; }
   .m-ok:hover { background: var(--brown-dark); }
   .m-cancel { background: #f1f3f5; color: #555; }
+  .m-alt { background: #fff; color: var(--brown-dark); border: 1px solid #e2d8ca !important; }
+  .m-alt:hover { background: var(--cream); }
 
   /* 온보딩 팝업 */
   .onboard-step { display: flex; gap: 12px; align-items: flex-start; margin: 14px 0; }
@@ -845,16 +912,17 @@
     </div>
     <div class="form-group">
       <label>주소 *</label>
-      <div style="display:flex; gap:6px;">
-        <input id="reg-addr" type="text" placeholder="예: 대구광역시 중구 동성로 1" style="flex:1;"
-               onkeydown="if(event.key==='Enter'){event.preventDefault();applyAddress();}">
-        <button type="button" class="cb" style="white-space:nowrap; padding:0 12px;" onclick="applyAddress()">주소 확인</button>
-      </div>
-      <div class="form-hint" id="reg-addr-hint">지도에서 우클릭한 위치의 주소예요. 주소를 고치면 <b>주소 확인</b>을 눌러 위치를 맞춰주세요.</div>
+      <input id="reg-addr" type="text" placeholder="예: 서울특별시 중구 세종대로 110"
+             onblur="applyAddress()" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
+      <div class="form-hint" id="reg-addr-hint">지도에서 우클릭한 위치의 주소예요. 주소를 고치면 그 위치로 자동으로 이동해요.</div>
     </div>
     <div class="form-group">
       <label>전화번호 (선택)</label>
-      <input id="reg-phone" type="tel" placeholder="예: 053-123-4567">
+      <input id="reg-phone" type="tel" placeholder="예: 02-123-4567">
+    </div>
+    <div class="form-group">
+      <label>영업시간 (선택)</label>
+      <input id="reg-hours" type="text" placeholder="예: 매일 09:00–22:00">
     </div>
     <div class="form-group">
       <label>카페 사진 (선택, 5MB 이하)</label>
@@ -1206,9 +1274,30 @@
       <div class="form-group" id="ask-input-wrap" style="display:none; margin-top:12px;">
         <input id="ask-input" type="text" onkeydown="if(event.key==='Enter')askDone(true)">
       </div>
-      <div class="m-actions">
+      <div class="m-actions" style="flex-wrap:wrap;">
         <button class="m-ok" id="ask-ok" onclick="askDone(true)">확인</button>
-        <button class="m-cancel" onclick="askDone(false)">취소</button>
+        <button class="m-alt" id="ask-alt" style="display:none;" onclick="askDone('alt')"></button>
+        <button class="m-cancel" id="ask-cancel" onclick="askDone(false)">취소</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 카페 정보 수정 제안 ===== -->
+<div class="modal-back" id="modal-edit">
+  <div class="modal">
+    <button class="modal-x" onclick="closeModal('modal-edit')" title="닫기"><svg class="ic" style="width:16px;height:16px" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
+    <div class="modal-scroll">
+      <h2>정보 수정</h2>
+      <div class="edit-target">
+        <span class="et-icon"><svg class="ic" style="width:15px;height:15px" viewBox="0 0 24 24"><path d="M12 21.5S5.5 15.6 5.5 10.8a6.5 6.5 0 1 1 13 0c0 4.8-6.5 10.7-6.5 10.7z"/><circle cx="12" cy="10.8" r="2.3"/></svg></span>
+        <span id="edit-cafe-name"></span>
+      </div>
+      <p class="edit-help">정확한 정보로 고쳐주시면 <b>모든 이용자에게 바로 반영</b>돼요. 여러 사람이 함께 만드는 지도예요.</p>
+      <div id="edit-fields"></div>
+      <div class="m-actions">
+        <button class="m-ok" onclick="submitEditInfo()">수정 저장</button>
+        <button class="m-cancel" onclick="closeModal('modal-edit')">취소</button>
       </div>
     </div>
   </div>
@@ -1220,17 +1309,14 @@
     <button class="modal-x" onclick="reasonCancel()" title="닫기"><svg class="ic" style="width:16px;height:16px" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button>
     <div class="modal-scroll">
       <h2>어떤 정보가 다른가요?</h2>
-      <p style="font-size:13px; margin-bottom:12px;">알려주시면 다른 이용자에게 표시되고, 여러 명이 같은 의견이면 확인 필요로 바뀌어요.</p>
+      <p style="font-size:13px; margin-bottom:14px; color:#8a7f73;">알려주시면 다른 이용자에게 표시되고, 여러 명이 같은 의견이면 확인 필요로 바뀌어요.</p>
       <div class="reason-list" id="reason-list"></div>
-      <div class="form-group" style="margin-top:12px;">
-        <label>직접 입력</label>
-        <input id="reason-etc" type="text" placeholder="예: 영업시간이 달라요"
+      <div class="reason-etc-row">
+        <input id="reason-etc" type="text" placeholder="직접 입력 (예: 사진과 달라요)"
                onkeydown="if(event.key==='Enter')reasonDone('__etc__')">
+        <button class="reason-etc-btn" onclick="reasonDone('__etc__')">제출</button>
       </div>
-      <div class="m-actions">
-        <button class="m-ok" onclick="reasonDone('__etc__')">직접 입력한 내용으로 제출</button>
-        <button class="m-cancel" onclick="reasonCancel()">취소</button>
-      </div>
+      <button class="reason-cancel" onclick="reasonCancel()">취소</button>
     </div>
   </div>
 </div>
@@ -1292,6 +1378,6 @@
 <!-- 카페 더미데이터 (엑셀 → 변환: 상호명/주소/전화번호(있는 곳만)/좌표) -->
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=2"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

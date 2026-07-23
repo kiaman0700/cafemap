@@ -26,6 +26,11 @@ function cafeFromRow(row) {
     avg_stars: row.avg_stars ? +row.avg_stars : 0,
     check_ok: row.check_ok || 0,
     check_bad: row.check_bad || 0,
+    closed: !!row.closed,
+    closureReports: row.closure_reports || 0,
+    createdAt: row.created_at || null,
+    updatedAt: row.updated_at || null,
+    hours: row.hours || '',
     reviews: null, // 상세에서 지연 로드
   };
 }
@@ -460,7 +465,7 @@ function showAboutData() {
    - input 없음: 확인=true / 취소=false
    - input 있음: 확인=입력값(string) / 취소=null */
 let askResolve = null;
-function uiAsk({ title, msg = '', input = null, ok = '확인', danger = false }) {
+function uiAsk({ title, msg = '', input = null, ok = '확인', alt = null, cancel = '취소', danger = false }) {
   return new Promise(resolve => {
     askResolve = resolve;
     document.getElementById('ask-title').textContent = title;
@@ -473,16 +478,20 @@ function uiAsk({ title, msg = '', input = null, ok = '확인', danger = false })
     const okBtn = document.getElementById('ask-ok');
     okBtn.textContent = ok;
     okBtn.style.background = danger ? '#e03131' : '';
+    const altBtn = document.getElementById('ask-alt');
+    altBtn.style.display = alt ? '' : 'none';
+    if (alt) altBtn.textContent = alt;
+    document.getElementById('ask-cancel').textContent = cancel;
     document.getElementById('modal-ask').classList.add('open');
     if (input !== null) setTimeout(() => { inp.focus(); inp.select(); }, 80);
   });
 }
-function askDone(okPressed) {
+function askDone(pressed) {   // pressed: true(ok) | 'alt' | false(cancel)
   document.getElementById('modal-ask').classList.remove('open');
   const isInput = document.getElementById('ask-input-wrap').style.display !== 'none';
   const result = isInput
-    ? (okPressed ? document.getElementById('ask-input').value : null)
-    : okPressed;
+    ? (pressed === true ? document.getElementById('ask-input').value : null)
+    : pressed;
   const r = askResolve; askResolve = null;
   if (r) r(result);
 }
@@ -556,7 +565,7 @@ let markerImageFlagged = null;
 function baseImageFor(id) {
   if (prefs.highlightFavs && favorites.has(id)) return markerImageFav;
   const c = cafes.find(x => x.id === id);
-  if (c?.status === 'flagged') return markerImageFlagged;
+  if (c && (c.status === 'flagged' || c.status === 'closing' || c.status === 'notcafe')) return markerImageFlagged;
   if (c?.status === 'verified') return markerImageVerified;
   return markerImage;
 }
@@ -842,6 +851,19 @@ function distM(a, b) {
 }
 function fmtDist(m) { return m < 1000 ? Math.round(m) + 'm' : (m / 1000).toFixed(1) + 'km'; }
 
+/* 상대 시간: "3일 전", "방금 전" */
+function timeAgo(iso) {
+  if (!iso) return '';
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 60) return '방금 전';
+  if (s < 3600) return Math.floor(s / 60) + '분 전';
+  if (s < 86400) return Math.floor(s / 3600) + '시간 전';
+  const d = Math.floor(s / 86400);
+  if (d < 30) return d + '일 전';
+  if (d < 365) return Math.floor(d / 30) + '개월 전';
+  return Math.floor(d / 365) + '년 전';
+}
+
 /* ===== 찜(즐겨찾기) — Supabase favorites 테이블 ===== */
 const favorites = new Set();
 async function toggleFav(id) {
@@ -932,7 +954,9 @@ function toggleVerifiedOnly() {
 /* 리스트 이름 옆 상태 태그 */
 function listStatusTag(c) {
   if (c.status === 'verified') return `<span class="ltag ok">✓ 검증</span>`;
-  if (c.status === 'flagged') return `<span class="ltag bad">⚠ 확인필요</span>`;
+  if (c.status === 'flagged') return `<span class="ltag bad">확인필요</span>`;
+  if (c.status === 'closing') return `<span class="ltag red">폐업?</span>`;
+  if (c.status === 'notcafe') return `<span class="ltag red">카페아님?</span>`;
   return '';
 }
 
@@ -1227,18 +1251,32 @@ async function loadCafeDetail(c) {
   (ck.data || []).forEach(x => { if (!x.is_correct && x.reason) rc[x.reason] = (rc[x.reason] || 0) + 1; });
   c.reasonCounts = Object.entries(rc).sort((a, b) => b[1] - a[1]);
   c.myCheck = my.data ? my.data.is_correct : null;
+
+  // 최신 상태·폐업 신고·수정 시각
+  const { data: cf } = await db.from('cafes').select('status, closed, updated_at, hours').eq('id', c.id).single();
+  if (cf) { c.status = cf.status; c.closed = !!cf.closed; c.updatedAt = cf.updated_at; c.hours = cf.hours || ''; }
+  const { data: cls } = await db.from('cafe_closures').select('kind').eq('cafe_id', c.id);
+  c.closureReports = (cls || []).length;
+  c.closedCount = (cls || []).filter(x => x.kind === 'closed').length;
+  c.notcafeCount = (cls || []).filter(x => x.kind === 'notcafe').length;
 }
 
+/* 상태 라벨 정의 */
+const STATUS = {
+  verified: { badge: '✓ 검증됨',          cls: 'ok',   dot: 'ok'  },
+  pending:  { badge: '검증 대기',          cls: '',     dot: ''    },
+  flagged:  { badge: '⚠ 정보 확인 필요',   cls: 'bad',  dot: 'bad' },
+  closing:  { badge: '⚠ 폐업 확인 필요',   cls: 'red',  dot: 'red' },
+  notcafe:  { badge: '⚠ 카페 여부 확인 필요', cls: 'red', dot: 'red' },
+};
 function statusBadge(c) {
-  if (c.status === 'verified') return `<span class="vbadge ok">✓ 검증됨</span>`;
-  if (c.status === 'flagged') return `<span class="vbadge bad">⚠ 정보 확인 필요</span>`;
-  return `<span class="vbadge">검증 대기</span>`;
+  const s = STATUS[c.status] || STATUS.pending;
+  return `<span class="vbadge ${s.cls}">${s.badge}</span>`;
 }
-/* 마커 라벨·리스트용 작은 상태 점 (검증됨/확인필요만 표시) */
+/* 마커 라벨·리스트용 작은 상태 점 */
 function statusDot(c) {
-  if (c.status === 'verified') return `<span class="sdot ok" title="검증됨"></span>`;
-  if (c.status === 'flagged') return `<span class="sdot bad" title="정보 확인 필요"></span>`;
-  return '';
+  const s = STATUS[c.status];
+  return s && s.dot ? `<span class="sdot ${s.dot}" title="${s.badge.replace(/[✓⚠]\s*/,'')}"></span>` : '';
 }
 
 async function openDetail(id, fromList) {
@@ -1279,8 +1317,11 @@ async function openDetail(id, fromList) {
     </div>
     <div class="detail-addr">${ic('pin', 13)} ${c.addr}</div>
     ${c.phone ? `<div class="detail-phone">${ic('phone', 13)} <a href="tel:${c.phone.replace(/[^0-9]/g, '')}">${c.phone}</a></div>` : ''}
+    ${c.hours ? `<div class="detail-hours">${ic('help', 13)} ${c.hours}</div>` : ''}
+    <div class="info-freshness">${freshnessText(c)}</div>
     ${c.photos.length ? `<div class="photo-strip">${c.photos.map(u => `<img src="${u}" loading="lazy" onclick="window.open('${u}')">`).join('')}</div>` : ''}
     <div>${c.price ? `<span class="chip price">${c.price}</span>` : ''}${c.mood.map(m => `<span class="chip">${m}</span>`).join('')}</div>
+    ${closureBanner(c)}
     ${renderVotes(c)}
     ${renderCheckBox(c)}
     <div class="btn-row">
@@ -1288,6 +1329,7 @@ async function openDetail(id, fromList) {
       <button class="btn route" onclick="openRoute()">${ic('route', 14)} 길찾기</button>
       <button class="btn rv" onclick="openRoadview()">${ic('eye', 14)} 로드뷰</button>
     </div>
+    <button class="btn-edit-info" onclick="openEditInfo()">${ic('pencil', 13)} 카페 정보 수정 제안</button>
     <div id="review-form">
       <div class="star-select" id="star-select">
         ${[1,2,3,4,5].map(i => `<span data-v="${i}" onclick="pickStar(${i})">★</span>`).join('')}
@@ -1322,14 +1364,136 @@ async function openDetail(id, fromList) {
 /* 작성자 표시명 (DB 조인으로 현재 닉네임이 이미 들어옴) */
 function reviewerName(r) { return r.user; }
 
+/* 정보 신선도: "등록 3개월 전 · 최근 수정 2일 전" */
+function freshnessText(c) {
+  const parts = [];
+  if (c.createdAt) parts.push(`등록 ${timeAgo(c.createdAt)}`);
+  if (c.updatedAt) parts.push(`최근 수정 ${timeAgo(c.updatedAt)}`);
+  return parts.length ? `🕒 ${parts.join(' · ')}` : '';
+}
+
+/* 폐업 / 카페아님 배너 */
+function closureBanner(c) {
+  const notcafe = c.status === 'notcafe';
+  // 삭제 단계(추정)
+  if (c.status === 'closing' || c.status === 'notcafe') {
+    const what = notcafe ? '카페가 아니라는' : '폐업';
+    const label = notcafe ? '카페 여부 확인 필요' : '폐업 확인 필요';
+    const cnt = notcafe ? c.notcafeCount : c.closedCount;
+    return `<div class="closure-banner closed">
+      <b>${label}</b> — ${what} 제보 ${cnt}건이 모였어요. 방문 전에 꼭 확인하세요.<br>
+      정보가 맞다면 아래 <b>맞아요</b>를 눌러주세요. 여러 명이 확인하면 정상으로 돌아가고,
+      계속 방치되면 지도에서 삭제돼요.</div>`;
+  }
+  // 아직 임계 미달이지만 제보가 있는 경우
+  if (c.closedCount > 0 || c.notcafeCount > 0) {
+    const bits = [];
+    if (c.closedCount > 0) bits.push(`폐업 제보 ${c.closedCount}건`);
+    if (c.notcafeCount > 0) bits.push(`카페 아님 제보 ${c.notcafeCount}건`);
+    return `<div class="closure-banner warn"><b>${bits.join(' · ')}</b> — 방문 전에 확인해 주세요.</div>`;
+  }
+  return '';
+}
+
+/* ===== 카페 정보 수정 제안 ===== */
+const EDIT_FIELDS = [
+  { key: 'name', label: '상호명' },
+  { key: 'addr', label: '주소' },
+  { key: 'phone', label: '전화번호', ph: '예: 02-123-4567' },
+  { key: 'hours', label: '영업시간', ph: '예: 매일 09:00–22:00' },
+  { key: 'price', label: '가격대' },
+];
+function openEditInfo(focusField) {
+  if (!requireLogin()) return;
+  const c = currentCafe;
+  document.getElementById('edit-cafe-name').textContent = c.name;
+  const box = document.getElementById('edit-fields');
+  box.innerHTML = EDIT_FIELDS.map(f => `
+    <div class="form-group">
+      <label>${f.label}</label>
+      ${f.key === 'price'
+        ? `<select id="edit-${f.key}">
+             ${['','₩3,000~5,000','₩5,000~7,000','₩7,000~10,000'].map(p =>
+               `<option value="${p}" ${((c.price||'')===p)?'selected':''}>${p||'선택 안 함'}</option>`).join('')}
+           </select>`
+        : `<input id="edit-${f.key}" type="text" placeholder="${f.ph || ''}" value="${(c[f.key] || '').replace(/"/g,'&quot;')}">`}
+    </div>`).join('');
+  document.getElementById('modal-edit').classList.add('open');
+  if (focusField) {
+    const el = document.getElementById('edit-' + focusField);
+    if (el) setTimeout(() => { el.focus(); el.select && el.select(); }, 100);
+  }
+}
+
+async function submitEditInfo() {
+  const c = currentCafe;
+  const cur = { name: c.name, addr: c.addr, phone: c.phone || '', price: c.price || '', hours: c.hours || '' };
+  const next = {};
+  const edits = [];
+  for (const f of EDIT_FIELDS) {
+    const v = document.getElementById('edit-' + f.key).value.trim();
+    if (v !== (cur[f.key] || '')) { next[f.key] = v; edits.push({ field: f.key, old_value: cur[f.key] || '', new_value: v }); }
+  }
+  if (!edits.length) return toast('바뀐 내용이 없어요');
+
+  // 주소가 바뀌면 좌표도 갱신
+  if (next.addr && geocoder) {
+    await new Promise(resolve => {
+      geocoder.addressSearch(next.addr, (r, s) => {
+        if (s === kakao.maps.services.Status.OK && r[0]) { next.lat = +r[0].y; next.lng = +r[0].x; }
+        resolve();
+      });
+    });
+  }
+
+  // 서버 함수로 수정 (시드 카페도 수정 가능 + 이력·불만 해결 일괄 처리)
+  const patch = {};
+  if (next.name != null) patch.name = next.name;
+  if (next.addr != null) patch.addr = next.addr;
+  if ('phone' in next) patch.phone = next.phone;
+  if ('price' in next) patch.price = next.price;
+  if ('hours' in next) patch.hours = next.hours;
+  if (next.lat) { patch.lat = next.lat; patch.lng = next.lng; }
+
+  const btn = document.querySelector('#modal-edit .m-ok');
+  if (btn) { btn.disabled = true; btn.textContent = '저장 중...'; }
+  const { error } = await db.rpc('submit_cafe_edit', { p_cafe_id: c.id, p_patch: patch, p_edits: edits });
+  if (btn) { btn.disabled = false; btn.textContent = '수정 저장'; }
+  if (error) return toast('수정에 실패했어요');
+
+  // 로컬 반영
+  Object.assign(c, {
+    name: patch.name ?? c.name, addr: patch.addr ?? c.addr,
+    phone: ('phone' in patch) ? (patch.phone || undefined) : c.phone,
+    price: ('price' in patch) ? patch.price : c.price,
+    hours: ('hours' in patch) ? patch.hours : c.hours,
+    updatedAt: new Date().toISOString(),
+  });
+  // 주소가 바뀌면 지도 마커도 실제로 그 위치로 이동
+  if (next.lat) {
+    c.lat = next.lat; c.lng = next.lng;
+    const mk = markerByCafe.get(c.id);
+    if (mk) mk.setPosition(new kakao.maps.LatLng(c.lat, c.lng));
+  }
+  closeModal('modal-edit');
+  toast('정보를 수정했어요. 고마워요!');
+  openDetail(c.id, cameFromList);
+}
+
 /* 정보 검증 투표: 맞아요/달라요 (같은 버튼을 다시 누르면 취소) */
-const CHECK_REASONS = ['폐업했어요', '위치가 달라요', '전화번호가 달라요', '이름이 달라요', '카페가 아니에요'];
+const CHECK_REASONS = ['폐업했어요', '위치가 달라요', '전화번호가 달라요', '상호명이 달라요', '영업시간이 달라요', '카페가 아니에요'];
 
 async function voteCheck(ok) {
   if (!requireLogin()) return;
 
-  // 같은 의견을 다시 누르면 취소
+  // 같은 의견을 다시 누르면 취소 (실수 방지 확인)
   if (currentCafe.myCheck === ok) {
+    const sure = await uiAsk({
+      title: '의견을 취소할까요?',
+      msg: ok ? '"맞아요" 의견을 취소해요.' : '"달라요" 의견을 취소해요.',
+      ok: '취소하기',
+    });
+    if (!sure) return;
     const { error } = await db.from('cafe_checks').delete()
       .eq('user_id', currentUser.id).eq('cafe_id', currentCafe.id);
     if (error) return toast('취소하지 못했어요');
@@ -1337,17 +1501,80 @@ async function voteCheck(ok) {
     return refreshCheckState();
   }
 
-  let reason = null;
-  if (!ok) {
-    reason = await pickReason();
-    if (reason === null) return; // 취소
+  // 맞아요 (확인 후 기록)
+  if (ok) {
+    const sure = await uiAsk({
+      title: '맞아요로 알려줄까요?',
+      msg: '이 카페 정보가 정확하다고 확인해요.',
+      ok: '맞아요',
+    });
+    if (!sure) return;
+    const { error } = await db.from('cafe_checks').upsert({
+      user_id: currentUser.id, cafe_id: currentCafe.id, is_correct: true, reason: null,
+    });
+    if (error) return toast('의견 등록에 실패했어요');
+    const wasFlagged = currentCafe.closureReports > 0 || currentCafe.closed;
+    await db.from('cafe_closures').delete().eq('user_id', currentUser.id).eq('cafe_id', currentCafe.id);
+    toast('정보가 맞다고 알려주셨어요. 고마워요!');
+    return wasFlagged ? openDetail(currentCafe.id, cameFromList) : refreshCheckState();
   }
-  const { error } = await db.from('cafe_checks').upsert({
-    user_id: currentUser.id, cafe_id: currentCafe.id, is_correct: ok, reason,
-  });
-  if (error) return toast('의견 등록에 실패했어요');
-  toast(ok ? '정보가 맞다고 알려주셨어요. 고마워요!' : '알려주셔서 고마워요. 다른 이용자에게도 표시할게요');
-  refreshCheckState();
+
+  // 달라요 → 사유 선택 (확인 단계에서 '뒤로'로 다시 고를 수 있음)
+  while (true) {
+    const reason = await pickReason();
+    if (reason === null) return; // 완전 취소
+
+    // 폐업/카페아님 → 삭제로 이어지는 신고 (강한 경고)
+    if (reason === '폐업했어요' || reason === '카페가 아니에요') {
+      const kind = reason === '폐업했어요' ? 'closed' : 'notcafe';
+      const label = reason === '폐업했어요' ? '폐업' : '카페가 아니라고';
+      const sure = await uiAsk({
+        title: reason === '폐업했어요' ? '정말 폐업했나요?' : '정말 카페가 아닌가요?',
+        msg: `제보가 모이면 이 장소 정보가 지도에서 삭제될 수 있어요.\n직접 확인한 정확한 정보일 때만 알려주세요.`,
+        ok: `${label} 확인`, cancel: '뒤로', danger: true,
+      });
+      if (!sure) continue; // 뒤로 → 사유 다시 선택
+      const { error } = await db.from('cafe_closures')
+        .upsert({ user_id: currentUser.id, cafe_id: currentCafe.id, kind });
+      if (error) return toast('신고에 실패했어요');
+      toast('알려주셔서 고마워요. 확인 후 반영할게요');
+      return openDetail(currentCafe.id, cameFromList);
+    }
+
+    // 그 외 사유 → 수정할지 물어봄 (수정 / 제출만 / 뒤로)
+    const field = reasonToField(reason);
+    const choice = await uiAsk({
+      title: `'${reason}'로 알려주시겠어요?`,
+      msg: field
+        ? '정확한 정보를 알고 계시면 지금 바로 고쳐주시면 큰 도움이 돼요.'
+        : '다른 이용자에게 표시되고, 여러 명이 같은 의견이면 확인 필요로 바뀌어요.',
+      ok: field ? '수정까지 할게요' : '제출할게요',
+      alt: field ? '제출만 할게요' : null,
+      cancel: '뒤로',
+    });
+    if (choice === false) continue; // 뒤로 → 사유 다시 선택
+
+    const { error } = await db.from('cafe_checks').upsert({
+      user_id: currentUser.id, cafe_id: currentCafe.id, is_correct: false, reason,
+    });
+    if (error) return toast('의견 등록에 실패했어요');
+
+    if (choice === true && field) {
+      openEditInfo(field);
+    } else {
+      toast('알려주셔서 고마워요. 다른 이용자에게도 표시할게요');
+    }
+    return refreshCheckState();
+  }
+}
+
+/* 사유 → 수정할 항목 매핑 */
+function reasonToField(reason) {
+  if (reason.includes('위치')) return 'addr';
+  if (reason.includes('전화')) return 'phone';
+  if (reason.includes('상호') || reason.includes('이름')) return 'name';
+  if (reason.includes('영업')) return 'hours';
+  return null;
 }
 
 /* 달라요 사유 선택 (직접 입력도 가능) */
@@ -1414,8 +1641,11 @@ function renderCheckBox(c) {
       </div>
       ${reasons.length ? `
       <div class="reason-summary">
-        <div class="rs-title">다르다는 의견</div>
-        ${reasons.map(([r, n]) => `<span class="rs-chip">${r} <b>${n}</b></span>`).join('')}
+        <div class="rs-title">다르다는 의견 — 정확한 정보를 알면 고쳐주세요</div>
+        ${reasons.map(([r, n]) => {
+          const f = reasonToField(r);
+          return `<span class="rs-chip">${r} <b>${n}</b>${f ? `<button class="rs-fix" onclick="openEditInfo('${f}')">수정</button>` : ''}</span>`;
+        }).join('')}
       </div>` : ''}
     </div>`;
 }
@@ -1733,6 +1963,8 @@ function openRegister() {
   document.getElementById('reg-submit').textContent = '등록하기';
   document.getElementById('reg-name').value = '';
   document.getElementById('reg-phone').value = '';
+  if (document.getElementById('reg-hours')) document.getElementById('reg-hours').value = '';
+  lastGeocodedAddr = '';
   document.querySelectorAll('#reg-tags .tp').forEach(t => t.classList.remove('on'));
   const addrInput = document.getElementById('reg-addr');
   addrInput.value = '';
@@ -1754,26 +1986,26 @@ function openRegister() {
 }
 
 /* 입력한 주소로 좌표를 맞춤 (주소 기준 등록) */
+let lastGeocodedAddr = '';
 function applyAddress() {
   const addr = document.getElementById('reg-addr').value.trim();
   const hint = document.getElementById('reg-addr-hint');
-  if (!addr) return toast('주소를 입력해 주세요');
-  if (!geocoder) return toast('지도를 불러온 뒤 이용할 수 있어요');
-  hint.textContent = '주소를 확인하는 중...';
+  if (!addr || addr === lastGeocodedAddr) return; // 빈 값·변화 없으면 조용히 무시
+  if (!geocoder) return;
+  lastGeocodedAddr = addr;
+  hint.textContent = '주소 위치를 확인하는 중...';
   geocoder.addressSearch(addr, (result, status) => {
     if (status !== kakao.maps.services.Status.OK || !result[0]) {
-      hint.innerHTML = '주소를 찾지 못했어요. 도로명 주소로 다시 입력해 보세요.';
+      hint.innerHTML = '주소를 찾지 못했어요. 도로명 주소로 입력하면 위치가 자동으로 맞춰져요.';
       return;
     }
     const p = result[0];
     pendingPos = { lat: +p.y, lng: +p.x };
     const pos = new kakao.maps.LatLng(pendingPos.lat, pendingPos.lng);
-    // 등록 위치 핀을 주소 위치로 이동
     if (tempMarker) tempMarker.setPosition(pos);
     if (tempOverlay) tempOverlay.setPosition(pos);
     if (map) map.setCenter(pos);
-    hint.innerHTML = `이 주소의 위치로 등록됩니다: <b>${p.address_name}</b>`;
-    toast('주소 위치로 지도를 옮겼어요');
+    hint.innerHTML = `이 위치로 등록돼요: <b>${p.address_name}</b>`;
   });
 }
 
@@ -1795,6 +2027,7 @@ async function doRegister() {
   const tags = [...document.querySelectorAll('#reg-tags .tp.on')].map(t => t.textContent);
   const price = document.getElementById('reg-price').value;
   const addr = document.getElementById('reg-addr').value.trim();
+  const hours = document.getElementById('reg-hours')?.value.trim() || '';
   const files = [...(document.getElementById('reg-photos')?.files || [])];
 
   const btn = document.getElementById('reg-submit');
@@ -1804,10 +2037,10 @@ async function doRegister() {
     if (editingCafeId !== null) {
       const cafe = cafes.find(c => c.id === editingCafeId);
       const { error } = await db.from('cafes').update({
-        name, addr, phone: phone || null, price: price || null, moods: tags,
+        name, addr, phone: phone || null, price: price || null, hours: hours || null, moods: tags,
       }).eq('id', cafe.id);
       if (error) throw error;
-      Object.assign(cafe, { name, addr, price, mood: tags });
+      Object.assign(cafe, { name, addr, price, hours, mood: tags });
       if (phone) cafe.phone = phone; else delete cafe.phone;
       if (files.length) {
         const urls = await uploadPhotos('cafe-photos', files, String(cafe.id));
@@ -1824,6 +2057,7 @@ async function doRegister() {
     const { data: row, error } = await db.from('cafes').insert({
       name, addr,
       phone: phone || null,
+      hours: hours || null,
       lat: pendingPos ? pendingPos.lat : map.getCenter().getLat(),
       lng: pendingPos ? pendingPos.lng : map.getCenter().getLng(),
       price: price || null,
@@ -1874,7 +2108,9 @@ function openEditCafe(id) {
   document.getElementById('reg-submit').textContent = '수정 저장';
   document.getElementById('reg-name').value = cafe.name;
   document.getElementById('reg-addr').value = cafe.addr;
+  lastGeocodedAddr = cafe.addr;
   document.getElementById('reg-phone').value = cafe.phone || '';
+  if (document.getElementById('reg-hours')) document.getElementById('reg-hours').value = cafe.hours || '';
   document.getElementById('reg-price').value = cafe.price;
   document.querySelectorAll('#reg-tags .tp').forEach(t =>
     t.classList.toggle('on', cafe.mood.includes(t.textContent)));
