@@ -527,10 +527,11 @@
   .vbadge.ok { background: #e7f3ea; color: #2f7d43; }
   .vbadge.bad { background: #fdeeee; color: #c92a2a; }
   .check-box {
-    display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    border: 1px solid #f0e9df; border-radius: 10px; padding: 9px 12px; margin: 10px 0;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
+    border: 1px solid #f0e9df; border-radius: 10px; padding: 10px 12px; margin: 10px 0;
   }
-  .cb-head { display: flex; align-items: center; gap: 8px; }
+  .check-box .reason-summary { flex-basis: 100%; }
+  .cb-head { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
   .cb-q { font-size: 12.5px; color: #8a7f73; }
   .cb-btns { display: flex; gap: 6px; }
   .cb {
@@ -540,6 +541,28 @@
   .cb:hover { background: var(--cream); }
   .cb.on { background: var(--brown); border-color: var(--brown); color: #fff; }
   .cb.on.bad { background: #c92a2a; border-color: #c92a2a; }
+
+  /* 달라요 사유 집계 */
+  .reason-summary { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ece3d5; }
+  .rs-title { font-size: 11.5px; font-weight: 700; color: #c0392b; margin-bottom: 6px; }
+  .rs-chip {
+    display: inline-block; font-size: 11.5px; padding: 3px 9px; margin: 0 5px 5px 0;
+    border-radius: 12px; background: #fdeeee; color: #b23b3b;
+  }
+  .rs-chip b { color: #922; }
+
+  /* 상태 태그: 리스트 이름 옆 */
+  .ltag {
+    display: inline-block; font-size: 10.5px; font-weight: 700; padding: 1px 6px;
+    border-radius: 5px; margin-left: 6px; vertical-align: 1.5px;
+  }
+  .ltag.ok { background: #e7f3ea; color: #2f7d43; }
+  .ltag.bad { background: #fdeeee; color: #c92a2a; }
+
+  /* 상태 점: 마커 라벨 이름 앞 */
+  .sdot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; vertical-align: 1px; }
+  .sdot.ok { background: #2f9e44; }
+  .sdot.bad { background: #e8a90c; }
 
   /* 달라요 사유 선택 */
   .reason-list { display: flex; flex-direction: column; gap: 6px; }
@@ -1269,6 +1292,6 @@
 <!-- 카페 더미데이터 (엑셀 → 변환: 상호명/주소/전화번호(있는 곳만)/좌표) -->
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=1"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>

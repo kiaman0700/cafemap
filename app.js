@@ -24,6 +24,8 @@ function cafeFromRow(row) {
     owner: row.owner,
     review_count: row.review_count || 0,
     avg_stars: row.avg_stars ? +row.avg_stars : 0,
+    check_ok: row.check_ok || 0,
+    check_bad: row.check_bad || 0,
     reviews: null, // 상세에서 지연 로드
   };
 }
@@ -526,11 +528,37 @@ const PIN_SVG_FAV = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="
   <circle cx="13" cy="13" r="11.5" fill="#fdf6ee" stroke="#e8590c" stroke-width="2"/>
   <g fill="#e8590c" stroke="none" transform="translate(1.9,2.1) scale(0.92)">${ICONS.heart}</g>
 </svg>`;
+/* 검증됨: 초록 테두리 + 체크 배지 */
+const PIN_SVG_VERIFIED = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26">
+  <circle cx="13" cy="13" r="11.5" fill="#6f4e37" stroke="#2f9e44" stroke-width="2"/>
+  <circle cx="13" cy="13" r="7.5" fill="#fdf6ee"/>
+  <path d="M8.8 10.2h7v4a2.8 2.8 0 0 1-2.8 2.8h-1.4a2.8 2.8 0 0 1-2.8-2.8z" fill="#6f4e37"/>
+  <path d="M15.8 11h1.1a1.6 1.6 0 0 1 0 3.2h-1.1z" fill="none" stroke="#6f4e37" stroke-width="1"/>
+  <circle cx="20" cy="6" r="5.5" fill="#2f9e44" stroke="#fff" stroke-width="1.3"/>
+  <path d="M17.7 6.1l1.6 1.6 3-3.2" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+/* 확인 필요(flagged): 앰버 테두리 + 느낌표 배지 */
+const PIN_SVG_FLAGGED = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26">
+  <circle cx="13" cy="13" r="11.5" fill="#6f4e37" stroke="#e8a90c" stroke-width="2"/>
+  <circle cx="13" cy="13" r="7.5" fill="#fdf6ee"/>
+  <path d="M8.8 10.2h7v4a2.8 2.8 0 0 1-2.8 2.8h-1.4a2.8 2.8 0 0 1-2.8-2.8z" fill="#6f4e37"/>
+  <path d="M15.8 11h1.1a1.6 1.6 0 0 1 0 3.2h-1.1z" fill="none" stroke="#6f4e37" stroke-width="1"/>
+  <circle cx="20" cy="6" r="5.5" fill="#e8590c" stroke="#fff" stroke-width="1.3"/>
+  <line x1="20" y1="3.4" x2="20" y2="6.6" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
+  <circle cx="20" cy="8.4" r="0.9" fill="#fff"/>
+</svg>`;
 let markerImage = null;
 let markerImageSelected = null;
 let markerImageFav = null;
+let markerImageVerified = null;
+let markerImageFlagged = null;
+/* 우선순위: 찜(있으면) > 확인 필요 > 검증됨 > 기본 */
 function baseImageFor(id) {
-  return (prefs.highlightFavs && favorites.has(id)) ? markerImageFav : markerImage;
+  if (prefs.highlightFavs && favorites.has(id)) return markerImageFav;
+  const c = cafes.find(x => x.id === id);
+  if (c?.status === 'flagged') return markerImageFlagged;
+  if (c?.status === 'verified') return markerImageVerified;
+  return markerImage;
 }
 
 /* ===== 지도 초기화 ===== */
@@ -554,6 +582,16 @@ function initMap() {
   );
   markerImageFav = new kakao.maps.MarkerImage(
     'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(PIN_SVG_FAV),
+    new kakao.maps.Size(26, 26),
+    { offset: new kakao.maps.Point(13, 13) }
+  );
+  markerImageVerified = new kakao.maps.MarkerImage(
+    'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(PIN_SVG_VERIFIED),
+    new kakao.maps.Size(26, 26),
+    { offset: new kakao.maps.Point(13, 13) }
+  );
+  markerImageFlagged = new kakao.maps.MarkerImage(
+    'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(PIN_SVG_FLAGGED),
     new kakao.maps.Size(26, 26),
     { offset: new kakao.maps.Point(13, 13) }
   );
@@ -637,7 +675,7 @@ function makeLabelOverlay(cafe, pinned) {
   const el = document.createElement('div');
   el.className = 'cafe-label' + (pinned ? ' pinned' : '');
   el.innerHTML = `
-    <div class="cl-name">${cafe.name}</div>
+    <div class="cl-name">${statusDot(cafe)}${cafe.name}</div>
     <div class="cl-meta">
       ${cafe.review_count ? `<span class="cl-star">★ ${cafe.avg_stars.toFixed(1)}</span>` : '<span class="cl-new">리뷰 없음</span>'}
       <span class="cl-price">${cafe.price}</span>
@@ -886,6 +924,17 @@ function toggleFavOnly() {
   favOnly = !favOnly;
   applyFilters();
 }
+let verifiedOnly = false;   // 검증된 곳만 보기
+function toggleVerifiedOnly() {
+  verifiedOnly = !verifiedOnly;
+  applyFilters();
+}
+/* 리스트 이름 옆 상태 태그 */
+function listStatusTag(c) {
+  if (c.status === 'verified') return `<span class="ltag ok">✓ 검증</span>`;
+  if (c.status === 'flagged') return `<span class="ltag bad">⚠ 확인필요</span>`;
+  return '';
+}
 
 /* 입력 즉시 제안·지우기 버튼 갱신, 무거운 마커 갱신은 디바운스 */
 let searchDebounce = null;
@@ -1015,6 +1064,7 @@ function getFiltered() {
   return cafes.filter(c =>
     !c.deleted &&
     (!favOnly || favorites.has(c.id)) &&
+    (!verifiedOnly || c.status === 'verified') &&
     (!kw || matchesKw(c, kw)) &&
     (!price || c.price === price) &&
     (!moods.length || moods.every(m => c.mood.includes(m)))
@@ -1091,6 +1141,7 @@ function renderListItems(filtered, globalCount) {
       <div class="fchip ${listSort === 'default' ? 'on' : ''}" onclick="setSort('default')">기본순</div>
       <div class="fchip ${listSort === 'near' ? 'on' : ''}" onclick="setSort('near')">가까운 순</div>
       <div class="fchip ${favOnly ? 'on' : ''}" onclick="toggleFavOnly()">찜한 곳만</div>
+      <div class="fchip ${verifiedOnly ? 'on' : ''}" onclick="toggleVerifiedOnly()">✓ 검증된 곳</div>
     </div>`;
 
   const kw = document.getElementById('search-input').value.trim();
@@ -1124,7 +1175,7 @@ function renderListItems(filtered, globalCount) {
     <div class="cafe-item" onclick="openDetail(${c.id}, true)"
          onmouseenter="hoverFromList(${c.id})" onmouseleave="scheduleHideLabel()">
       <div class="info">
-        <div class="name">${c.name}${c.review_count ? `<span class="inline-rate">★ ${c.avg_stars.toFixed(1)} <em>(${c.review_count})</em></span>` : ''}</div>
+        <div class="name">${c.name}${listStatusTag(c)}${c.review_count ? `<span class="inline-rate">★ ${c.avg_stars.toFixed(1)} <em>(${c.review_count})</em></span>` : ''}</div>
         <div class="meta">${c.addr}${refPos ? ` · <span class="dist-tag">${fmtDist(distM(refPos, c))}</span>` : ''}</div>
         ${c.phone ? `<div class="phone">${ic('phone', 11)} ${c.phone}</div>` : ''}
         <span class="chip price">${c.price}</span>${c.mood.slice(0, 2).map(m => `<span class="chip">${m}</span>`).join('')}
@@ -1149,7 +1200,7 @@ async function loadCafeDetail(c) {
   const [rv, ph, ck, my] = await Promise.all([
     db.from('reviews').select('*, profiles(nick)').eq('cafe_id', c.id).order('created_at', { ascending: false }),
     db.from('cafe_photos').select('url').eq('cafe_id', c.id),
-    db.from('cafe_checks').select('is_correct').eq('cafe_id', c.id),
+    db.from('cafe_checks').select('is_correct, reason').eq('cafe_id', c.id),
     currentUser
       ? db.from('cafe_checks').select('is_correct').eq('cafe_id', c.id).eq('user_id', currentUser.id).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -1171,13 +1222,23 @@ async function loadCafeDetail(c) {
   c.photos = (ph.data || []).map(p => p.url);
   c.checkOk = (ck.data || []).filter(x => x.is_correct).length;
   c.checkBad = (ck.data || []).filter(x => !x.is_correct).length;
+  // 달라요 사유 집계 (많은 순)
+  const rc = {};
+  (ck.data || []).forEach(x => { if (!x.is_correct && x.reason) rc[x.reason] = (rc[x.reason] || 0) + 1; });
+  c.reasonCounts = Object.entries(rc).sort((a, b) => b[1] - a[1]);
   c.myCheck = my.data ? my.data.is_correct : null;
 }
 
 function statusBadge(c) {
   if (c.status === 'verified') return `<span class="vbadge ok">✓ 검증됨</span>`;
-  if (c.status === 'flagged') return `<span class="vbadge bad">정보 확인 필요</span>`;
+  if (c.status === 'flagged') return `<span class="vbadge bad">⚠ 정보 확인 필요</span>`;
   return `<span class="vbadge">검증 대기</span>`;
+}
+/* 마커 라벨·리스트용 작은 상태 점 (검증됨/확인필요만 표시) */
+function statusDot(c) {
+  if (c.status === 'verified') return `<span class="sdot ok" title="검증됨"></span>`;
+  if (c.status === 'flagged') return `<span class="sdot bad" title="정보 확인 필요"></span>`;
+  return '';
 }
 
 async function openDetail(id, fromList) {
@@ -1319,19 +1380,29 @@ function reasonCancel() {
 async function refreshCheckState() {
   const id = currentCafe.id;
   const [ck, my, cf] = await Promise.all([
-    db.from('cafe_checks').select('is_correct').eq('cafe_id', id),
+    db.from('cafe_checks').select('is_correct, reason').eq('cafe_id', id),
     db.from('cafe_checks').select('is_correct').eq('cafe_id', id).eq('user_id', currentUser.id).maybeSingle(),
     db.from('cafes').select('status').eq('id', id).single(),
   ]);
   currentCafe.checkOk = (ck.data || []).filter(x => x.is_correct).length;
   currentCafe.checkBad = (ck.data || []).filter(x => !x.is_correct).length;
+  const rc = {};
+  (ck.data || []).forEach(x => { if (!x.is_correct && x.reason) rc[x.reason] = (rc[x.reason] || 0) + 1; });
+  currentCafe.reasonCounts = Object.entries(rc).sort((a, b) => b[1] - a[1]);
   currentCafe.myCheck = my.data ? my.data.is_correct : null;
+  const prevStatus = currentCafe.status;
   if (cf.data) currentCafe.status = cf.data.status;
   const box = document.querySelector('.check-box');
   if (box) box.outerHTML = renderCheckBox(currentCafe);
+  // 상태가 바뀌면 지도 마커도 갱신
+  if (prevStatus !== currentCafe.status) {
+    const mk = markerByCafe.get(id);
+    if (mk && id !== selectedCafeId) mk.setImage(baseImageFor(id));
+  }
 }
 
 function renderCheckBox(c) {
+  const reasons = c.reasonCounts || [];
   return `
     <div class="check-box">
       <div class="cb-head">${statusBadge(c)} <span class="cb-q">이 카페 정보가 맞나요?</span></div>
@@ -1341,6 +1412,11 @@ function renderCheckBox(c) {
         <button class="cb ${c.myCheck === false ? 'on bad' : ''}" onclick="voteCheck(false)"
           title="${c.myCheck === false ? '다시 누르면 취소돼요' : ''}">달라요 ${c.checkBad || 0}</button>
       </div>
+      ${reasons.length ? `
+      <div class="reason-summary">
+        <div class="rs-title">다르다는 의견</div>
+        ${reasons.map(([r, n]) => `<span class="rs-chip">${r} <b>${n}</b></span>`).join('')}
+      </div>` : ''}
     </div>`;
 }
 
