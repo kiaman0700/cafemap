@@ -632,9 +632,23 @@ function initMap() {
     if (pinnedLabel) pinnedLabel.setPosition(pinnedLabel.getPosition());
   });
 
-  // 카페 등록은 우클릭으로 (일반 클릭/드래그와 분리)
+  // 카페 등록: PC는 우클릭, 모바일은 길게 누르기
   kakao.maps.event.addListener(map, 'rightclick', e => showRegisterButton(e.latLng));
   document.getElementById('map').addEventListener('contextmenu', e => e.preventDefault());
+  initLongPressRegister();
+
+  // 화면 크기·방향이 바뀌면 지도 크기를 다시 계산 (모바일 회전·주소창 접힘 대응)
+  let relayoutTimer = null;
+  const relayout = () => {
+    clearTimeout(relayoutTimer);
+    relayoutTimer = setTimeout(() => {
+      const c = map.getCenter();
+      map.relayout();
+      map.setCenter(c);
+    }, 150);
+  };
+  window.addEventListener('resize', relayout);
+  window.addEventListener('orientationchange', relayout);
 
   // 지도를 움직이면 "이 지역에서 재검색" 버튼 표시 + 마지막 위치 기억
   // (검색 중이면 누를 때 새 지도 중심 기준으로 재정렬됨)
@@ -655,6 +669,44 @@ function initMap() {
   applyFilters(false);
   // 공유 링크 > 설정된 시작 위치 순으로 처리
   if (!openSharedCafe() && prefs.startLoc === 'myloc') autoLocate();
+}
+
+/* 모바일: 지도를 길게 누르면 그 위치에 등록 버튼 표시
+   (손가락이 움직이면 지도 드래그로 판단해 취소) */
+function initLongPressRegister() {
+  const el = document.getElementById('map');
+  let timer = null, startX = 0, startY = 0, fired = false;
+  const MOVE_TOLERANCE = 12;  // px
+  const HOLD_MS = 550;
+
+  const cancel = () => { clearTimeout(timer); timer = null; };
+
+  el.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1) return cancel();       // 두 손가락(줌)이면 무시
+    if (e.target.closest('.reg-overlay-btn, .cafe-label')) return; // 버튼/라벨은 제외
+    const t = e.touches[0];
+    startX = t.clientX; startY = t.clientY; fired = false;
+    cancel();
+    timer = setTimeout(() => {
+      fired = true;
+      const rect = el.getBoundingClientRect();
+      const proj = map.getProjection();
+      const pos = proj.coordsFromContainerPoint(
+        new kakao.maps.Point(startX - rect.left, startY - rect.top));
+      showRegisterButton(pos);
+      if (navigator.vibrate) navigator.vibrate(30);     // 눌렸다는 촉각 피드백
+    }, HOLD_MS);
+  }, { passive: true });
+
+  el.addEventListener('touchmove', e => {
+    if (!timer) return;
+    const t = e.touches[0];
+    if (Math.abs(t.clientX - startX) > MOVE_TOLERANCE ||
+        Math.abs(t.clientY - startY) > MOVE_TOLERANCE) cancel(); // 드래그 → 취소
+  }, { passive: true });
+
+  el.addEventListener('touchend', () => cancel(), { passive: true });
+  el.addEventListener('touchcancel', () => cancel(), { passive: true });
 }
 
 /* 카페 1곳의 마커 생성 */

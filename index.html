@@ -35,6 +35,11 @@
     --green: #2f9e44;
   }
 
+  /* 지도는 길게 누르기(등록)를 위해 텍스트 선택·터치 콜아웃 비활성화.
+     리스트·상세는 복사할 수 있게 선택 허용 */
+  #map { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  .panel, .fullpage, .modal { -webkit-user-select: text; user-select: text; }
+
   /* ===== SVG 아이콘 공통 ===== */
   .ic {
     fill: none; stroke: currentColor; stroke-width: 1.8;
@@ -772,6 +777,45 @@
     background: rgba(40,30,20,.92); color: #fff; padding: 12px 24px; border-radius: 24px;
     font-size: 14px; z-index: 999; display: none; box-shadow: 0 4px 14px rgba(0,0,0,.3);
   }
+
+  /* ===== 모바일 대응 (맨 뒤에 두어 기본 규칙을 덮어씀) ===== */
+  @media (max-width: 640px) {
+    header { height: 52px; padding: 0 10px; }
+    .logo .logo-text { font-size: 17px; }
+    .hbtn { height: 36px; padding: 0 11px; font-size: 13px; }
+    .hbtn.icon { width: 36px; }
+    #map-wrap { top: 52px; }
+
+    /* 패널을 화면 전체 폭으로 */
+    .panel { width: 100%; max-width: 100%; }
+    .fullpage { inset: 52px 0 0 0; }
+    .fullpage-inner { padding: 20px 14px 48px; }
+
+    /* 지도 위 컨트롤을 손가락 크기에 맞게 */
+    .map-search { top: 10px; left: 10px; }
+    .search-icon-btn { width: 46px; height: 46px; }
+    #quick-chips { top: 14px; left: 64px; max-width: calc(100% - 74px); }
+    .fchip.mq { padding: 8px 13px; }
+    .map-topright { top: 10px; right: 10px; }
+    .map-topright .hbtn { padding: 0 10px; font-size: 12.5px; }
+    #zoom-ctrl { display: none; }        /* 모바일은 핀치 줌 사용 */
+    #loc-btn { right: 12px; bottom: 16px; width: 50px; height: 50px; }
+    #area-btn { top: 62px; }
+
+    /* 모달: 아래에서 올라오는 시트 느낌 */
+    .modal-back { padding: 10px; align-items: flex-end; }
+    .modal { width: 100%; max-width: 100%; }
+    .modal-scroll { padding: 22px 18px; }
+    .m-actions { flex-wrap: wrap; }
+    .m-actions button { min-height: 46px; }
+
+    /* 상세·마이페이지 요소 줄바꿈 */
+    .btn-row { flex-wrap: wrap; }
+    .btn-row .btn { min-width: 30%; }
+    .stat-row { flex-wrap: wrap; }
+    .stat { min-width: 45%; }
+    .cafe-label { max-width: 70vw; white-space: normal; }
+  }
 </style>
 </head>
 <body>
@@ -1150,7 +1194,7 @@
       </div>
       <div class="onboard-step">
         <div class="num"><i data-ic="plus" data-size="14"></i></div>
-        <div><b>새 카페 등록하기</b><p>지도를 <b>마우스 오른쪽 버튼</b>으로 클릭하면 그 위치에 카페를 등록할 수 있어요.</p></div>
+        <div><b>새 카페 등록하기</b><p>지도를 <b>길게 누르면</b>(PC는 마우스 오른쪽 클릭) 그 위치에 카페를 등록할 수 있어요.</p></div>
       </div>
       <div class="m-actions">
         <button class="m-ok" onclick="closeOnboard()">시작하기</button>
@@ -1378,6 +1422,6 @@
 <!-- 카페 더미데이터 (엑셀 → 변환: 상호명/주소/전화번호(있는 곳만)/좌표) -->
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=7"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>
