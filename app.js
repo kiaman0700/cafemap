@@ -546,13 +546,13 @@ const PIN_SVG_VERIFIED = `<svg xmlns="http://www.w3.org/2000/svg" width="26" hei
   <circle cx="20" cy="6" r="5.5" fill="#2f9e44" stroke="#fff" stroke-width="1.3"/>
   <path d="M17.7 6.1l1.6 1.6 3-3.2" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
-/* 확인 필요(flagged): 앰버 테두리 + 느낌표 배지 */
+/* 확인 필요(flagged): 노란 테두리 + 느낌표 배지 (주황·빨강보다 한 단계 낮은 경고) */
 const PIN_SVG_FLAGGED = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26">
-  <circle cx="13" cy="13" r="11.5" fill="#6f4e37" stroke="#e8a90c" stroke-width="2"/>
+  <circle cx="13" cy="13" r="11.5" fill="#6f4e37" stroke="#f2b705" stroke-width="2"/>
   <circle cx="13" cy="13" r="7.5" fill="#fdf6ee"/>
   <path d="M8.8 10.2h7v4a2.8 2.8 0 0 1-2.8 2.8h-1.4a2.8 2.8 0 0 1-2.8-2.8z" fill="#6f4e37"/>
   <path d="M15.8 11h1.1a1.6 1.6 0 0 1 0 3.2h-1.1z" fill="none" stroke="#6f4e37" stroke-width="1"/>
-  <circle cx="20" cy="6" r="5.5" fill="#e8590c" stroke="#fff" stroke-width="1.3"/>
+  <circle cx="20" cy="6" r="5.5" fill="#d99e00" stroke="#fff" stroke-width="1.3"/>
   <line x1="20" y1="3.4" x2="20" y2="6.6" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
   <circle cx="20" cy="8.4" r="0.9" fill="#fff"/>
 </svg>`;
@@ -566,14 +566,15 @@ const PIN_SVG_CLOSING = `<svg xmlns="http://www.w3.org/2000/svg" width="26" heig
   <circle cx="20" cy="6" r="5.5" fill="#c92a2a" stroke="#fff" stroke-width="1.3"/>
   <line x1="17.6" y1="6" x2="22.4" y2="6" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>
 </svg>`;
-/* 카페 아님 추정: 빨간 테두리 + 물음표 (컵 대신 ?를 넣어 "카페 맞나?"가 바로 읽히게) */
+/* 카페 아님 추정: 주황 테두리 + 물음표 (컵 대신 ?를 넣어 "카페 맞나?"가 바로 읽히게)
+   폐업 추정(빨강)과 색으로 구분되도록 한 단계 낮은 주황을 쓴다 */
 const PIN_SVG_NOTCAFE = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26">
-  <circle cx="13" cy="13" r="11.5" fill="#9b8579" stroke="#c92a2a" stroke-width="2"/>
-  <circle cx="13" cy="13" r="7.5" fill="#fdf6ee"/>
-  <path d="M10.9 11.1a2.2 2.2 0 1 1 2.5 2.2v1.2" fill="none" stroke="#c92a2a"
+  <circle cx="13" cy="13" r="11.5" fill="#a68a6d" stroke="#f76707" stroke-width="2"/>
+  <circle cx="13" cy="13" r="7.5" fill="#fff6ee"/>
+  <path d="M10.9 11.1a2.2 2.2 0 1 1 2.5 2.2v1.2" fill="none" stroke="#e8590c"
         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="13.4" cy="16.6" r="1" fill="#c92a2a"/>
-  <circle cx="20" cy="6" r="5.5" fill="#c92a2a" stroke="#fff" stroke-width="1.3"/>
+  <circle cx="13.4" cy="16.6" r="1" fill="#e8590c"/>
+  <circle cx="20" cy="6" r="5.5" fill="#f76707" stroke="#fff" stroke-width="1.3"/>
   <path d="M18.2 4.9a1.8 1.8 0 1 1 2 1.8v.6" fill="none" stroke="#fff"
         stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
   <circle cx="20.2" cy="8.5" r="0.85" fill="#fff"/>
@@ -1066,8 +1067,8 @@ function toggleVerifiedOnly() {
 function listStatusTag(c) {
   if (c.status === 'verified') return `<span class="ltag ok">✓ 검증</span>`;
   if (c.status === 'flagged') return `<span class="ltag bad">확인필요</span>`;
+  if (c.status === 'notcafe') return `<span class="ltag orange">카페 아님 추정</span>`;
   if (c.status === 'closing') return `<span class="ltag red">폐업 추정</span>`;
-  if (c.status === 'notcafe') return `<span class="ltag red">카페 아님 추정</span>`;
   return '';
 }
 
@@ -1411,13 +1412,14 @@ function summarizeClosures(rows) {
   };
 }
 
-/* 상태 라벨 정의 */
+/* 상태 라벨 정의
+   심각도 색 단계: 초록(검증) → 노랑(정보 확인) → 주황(카페 아님 추정) → 빨강(폐업 추정) */
 const STATUS = {
-  verified: { badge: '✓ 검증됨',        cls: 'ok',  dot: 'ok'  },
-  pending:  { badge: '검증 대기',        cls: '',    dot: ''    },
-  flagged:  { badge: '⚠ 정보 확인 필요', cls: 'bad', dot: 'bad' },
-  closing:  { badge: '⚠ 폐업 추정',      cls: 'red', dot: 'red' },
-  notcafe:  { badge: '⚠ 카페 아님 추정',  cls: 'red', dot: 'red' },
+  verified: { badge: '✓ 검증됨',        cls: 'ok',     dot: 'ok'     },
+  pending:  { badge: '검증 대기',        cls: '',       dot: ''       },
+  flagged:  { badge: '⚠ 정보 확인 필요', cls: 'bad',    dot: 'bad'    },
+  notcafe:  { badge: '⚠ 카페 아님 추정',  cls: 'orange', dot: 'orange' },
+  closing:  { badge: '⚠ 폐업 추정',      cls: 'red',    dot: 'red'    },
 };
 function statusBadge(c) {
   const s = STATUS[c.status] || STATUS.pending;
@@ -1531,7 +1533,7 @@ function closureBanner(c) {
     const label = notcafe ? '카페 아님 추정' : '폐업 추정';
     const cnt = notcafe ? c.notcafeCount : c.closedCount;
     const at = notcafe ? c.lastNotcafeAt : c.lastClosedAt;
-    return `<div class="closure-banner closed">
+    return `<div class="closure-banner ${notcafe ? 'orange' : 'closed'}">
       <b>${label}</b> — ${what} 제보 ${cnt}건이 모였어요${at ? ` (최근 ${timeAgo(at)})` : ''}. 방문 전에 꼭 확인하세요.<br>
       정보가 맞다면 아래 <b>맞아요</b>를 눌러주세요. 여러 명이 확인하면 정상으로 돌아가고,
       계속 방치되면 지도에서 삭제돼요.</div>`;

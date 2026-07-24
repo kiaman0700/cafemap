@@ -546,8 +546,10 @@
     display: inline-block; font-size: 11px; font-weight: 700; padding: 2.5px 8px;
     border-radius: 6px; background: #f4efe7; color: #8a7f73;
   }
+  /* 심각도 색: 초록(검증) → 노랑(정보 확인) → 주황(카페 아님 추정) → 빨강(폐업 추정) */
   .vbadge.ok { background: #e7f3ea; color: #2f7d43; }
-  .vbadge.bad { background: #fff5e6; color: #b26a00; }
+  .vbadge.bad { background: #fff8e1; color: #9a7300; }
+  .vbadge.orange { background: #fff1e6; color: #d9480f; }
   .vbadge.red { background: #fdeeee; color: #c92a2a; }
   .check-box {
     border: 1px solid #f0e9df; border-radius: 12px; padding: 12px; margin: 10px 0;
@@ -600,13 +602,15 @@
     border-radius: 5px; margin-left: 6px; vertical-align: 1.5px;
   }
   .ltag.ok { background: #e7f3ea; color: #2f7d43; }
-  .ltag.bad { background: #fff5e6; color: #b26a00; }
+  .ltag.bad { background: #fff8e1; color: #9a7300; }
+  .ltag.orange { background: #fff1e6; color: #d9480f; }
   .ltag.red { background: #fdeeee; color: #c92a2a; }
 
   /* 상태 점: 마커 라벨 이름 앞 */
   .sdot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; vertical-align: 1px; }
   .sdot.ok { background: #2f9e44; }
-  .sdot.bad { background: #e8a90c; }
+  .sdot.bad { background: #f2b705; }
+  .sdot.orange { background: #f76707; }
   .sdot.red { background: #c92a2a; }
 
   /* 정보 신선도 */
@@ -617,7 +621,8 @@
     font-size: 12.5px; line-height: 1.5; border-radius: 10px;
     padding: 9px 12px; margin: 10px 0;
   }
-  .closure-banner.warn { background: #fff5e6; color: #b26a00; border: 1px solid #ffe0b2; }
+  .closure-banner.warn { background: #fff8e1; color: #9a7300; border: 1px solid #ffe9a8; }
+  .closure-banner.orange { background: #fff1e6; color: #c2410c; border: 1px solid #ffd6b8; }
   .closure-banner.closed { background: #fdeeee; color: #b23b3b; border: 1px solid #f5c6c6; }
 
   /* 정보 수정 제안 버튼 */
@@ -1464,6 +1469,6 @@
 <!-- 카페 더미데이터 (엑셀 → 변환: 상호명/주소/전화번호(있는 곳만)/좌표) -->
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=11"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>
