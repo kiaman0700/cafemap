@@ -556,16 +556,43 @@ const PIN_SVG_FLAGGED = `<svg xmlns="http://www.w3.org/2000/svg" width="26" heig
   <line x1="20" y1="3.4" x2="20" y2="6.6" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
   <circle cx="20" cy="8.4" r="0.9" fill="#fff"/>
 </svg>`;
+/* 폐업 추정: 빨간 테두리 + 닫힘(－) 배지 */
+const PIN_SVG_CLOSING = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26">
+  <circle cx="13" cy="13" r="11.5" fill="#9b8579" stroke="#c92a2a" stroke-width="2"/>
+  <circle cx="13" cy="13" r="7.5" fill="#fdf6ee"/>
+  <path d="M8.8 10.2h7v4a2.8 2.8 0 0 1-2.8 2.8h-1.4a2.8 2.8 0 0 1-2.8-2.8z" fill="#9b8579"/>
+  <path d="M15.8 11h1.1a1.6 1.6 0 0 1 0 3.2h-1.1z" fill="none" stroke="#9b8579" stroke-width="1"/>
+  <line x1="7.5" y1="18.5" x2="18.5" y2="7.5" stroke="#c92a2a" stroke-width="2.2" stroke-linecap="round"/>
+  <circle cx="20" cy="6" r="5.5" fill="#c92a2a" stroke="#fff" stroke-width="1.3"/>
+  <line x1="17.6" y1="6" x2="22.4" y2="6" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>
+</svg>`;
+/* 카페 아님 추정: 빨간 테두리 + 물음표 (컵 대신 ?를 넣어 "카페 맞나?"가 바로 읽히게) */
+const PIN_SVG_NOTCAFE = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26">
+  <circle cx="13" cy="13" r="11.5" fill="#9b8579" stroke="#c92a2a" stroke-width="2"/>
+  <circle cx="13" cy="13" r="7.5" fill="#fdf6ee"/>
+  <path d="M10.9 11.1a2.2 2.2 0 1 1 2.5 2.2v1.2" fill="none" stroke="#c92a2a"
+        stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="13.4" cy="16.6" r="1" fill="#c92a2a"/>
+  <circle cx="20" cy="6" r="5.5" fill="#c92a2a" stroke="#fff" stroke-width="1.3"/>
+  <path d="M18.2 4.9a1.8 1.8 0 1 1 2 1.8v.6" fill="none" stroke="#fff"
+        stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="20.2" cy="8.5" r="0.85" fill="#fff"/>
+</svg>`;
 let markerImage = null;
 let markerImageSelected = null;
 let markerImageFav = null;
 let markerImageVerified = null;
 let markerImageFlagged = null;
-/* 우선순위: 찜(있으면) > 확인 필요 > 검증됨 > 기본 */
+let markerImageClosing = null;
+let markerImageNotcafe = null;
+/* 우선순위: 삭제 절차(폐업·카페아님 추정) > 찜 > 확인 필요 > 검증됨 > 기본
+   — 삭제 절차 단계는 헛걸음을 막는 경고라 찜보다 먼저 보여준다 */
 function baseImageFor(id) {
-  if (prefs.highlightFavs && favorites.has(id)) return markerImageFav;
   const c = cafes.find(x => x.id === id);
-  if (c && (c.status === 'flagged' || c.status === 'closing' || c.status === 'notcafe')) return markerImageFlagged;
+  if (c?.status === 'closing') return markerImageClosing;
+  if (c?.status === 'notcafe') return markerImageNotcafe;
+  if (prefs.highlightFavs && favorites.has(id)) return markerImageFav;
+  if (c?.status === 'flagged') return markerImageFlagged;
   if (c?.status === 'verified') return markerImageVerified;
   return markerImage;
 }
@@ -601,6 +628,16 @@ function initMap() {
   );
   markerImageFlagged = new kakao.maps.MarkerImage(
     'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(PIN_SVG_FLAGGED),
+    new kakao.maps.Size(26, 26),
+    { offset: new kakao.maps.Point(13, 13) }
+  );
+  markerImageClosing = new kakao.maps.MarkerImage(
+    'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(PIN_SVG_CLOSING),
+    new kakao.maps.Size(26, 26),
+    { offset: new kakao.maps.Point(13, 13) }
+  );
+  markerImageNotcafe = new kakao.maps.MarkerImage(
+    'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(PIN_SVG_NOTCAFE),
     new kakao.maps.Size(26, 26),
     { offset: new kakao.maps.Point(13, 13) }
   );
@@ -650,14 +687,14 @@ function initMap() {
   window.addEventListener('resize', relayout);
   window.addEventListener('orientationchange', relayout);
 
-  // 지도를 움직이면 "이 지역에서 재검색" 버튼 표시 + 마지막 위치 기억
-  // (검색 중이면 누를 때 새 지도 중심 기준으로 재정렬됨)
-  const showAreaBtn = () => {
-    document.getElementById('area-btn').style.display = 'flex';
+  // 지도를 움직이면 보이는 영역의 카페를 자동으로 따라 보여준다 (카카오맵·거지맵 방식).
+  // 단, 이름·주소로 검색 중일 때는 결과가 멋대로 바뀌면 안 되므로
+  // "이 지역에서 재검색" 버튼을 띄워 사용자가 직접 누르게 한다 (네이버·구글 방식).
+  kakao.maps.event.addListener(map, 'idle', () => {
     saveLastView();
-  };
-  kakao.maps.event.addListener(map, 'dragend', showAreaBtn);
-  kakao.maps.event.addListener(map, 'zoom_changed', showAreaBtn);
+    if (kwActive()) { document.getElementById('area-btn').style.display = 'flex'; return; }
+    followViewport();
+  });
 
   // 일반 클릭은 떠 있는 등록 버튼을 닫기만
   kakao.maps.event.addListener(map, 'click', removeTempMarker);
@@ -965,13 +1002,30 @@ let listSort = 'default'; // 'default' | 'near'
 let favOnly = false;      // 찜한 곳만 보기
 let areaBounds = null;    // "이 지역에서 재검색" 영역
 
-/* 이 지역에서 재검색 (네이버식): 마커를 현재 영역 기준으로 갱신.
+/* 검색어가 입력되어 있는지 */
+function kwActive() {
+  return !!document.getElementById('search-input').value.trim();
+}
+
+/* 이 지역에서 재검색: 마커·리스트를 현재 보이는 영역 기준으로 갱신.
    리스트는 열려 있을 때만 함께 갱신되고, 닫혀 있으면 강제로 열지 않음 */
 function searchThisArea() {
   if (!map) return;
   areaBounds = map.getBounds();
   document.getElementById('area-btn').style.display = 'none';
   applyFilters(false);
+}
+
+/* 지도를 움직이면 보이는 영역을 그대로 따라가며 갱신.
+   목록을 보던 위치가 튀지 않도록 스크롤 위치는 유지한다 */
+function followViewport() {
+  if (!map) return;
+  areaBounds = map.getBounds();
+  document.getElementById('area-btn').style.display = 'none';
+  const scroll = document.getElementById('panel-scroll');
+  const top = scroll ? scroll.scrollTop : 0;
+  applyFilters(false);
+  if (scroll) scroll.scrollTop = top;
 }
 
 /* 지도 확대/축소 (커스텀 줌 컨트롤) */
@@ -990,13 +1044,18 @@ function fitToResults() {
   const b = new kakao.maps.LatLngBounds();
   nearest.forEach(c => b.extend(new kakao.maps.LatLng(c.lat, c.lng)));
   map.setBounds(b);
-  setTimeout(() => searchThisArea(), 500); // 이동이 끝난 뒤 그 영역 기준으로 갱신
+  // 이동이 끝나면 'idle'에서 그 영역 기준으로 자동 갱신된다
 }
 
 function toggleFavOnly() {
   if (!favOnly && !requireLogin()) return;
   favOnly = !favOnly;
   applyFilters();
+  // 켤 때는 찜한 곳이 화면 밖에 있을 수 있으니 보이는 곳으로 이동
+  if (favOnly) {
+    if (favorites.size) fitToResults();
+    else toast('아직 찜한 카페가 없어요. 하트를 눌러 저장해 보세요.');
+  }
 }
 let verifiedOnly = false;   // 검증된 곳만 보기
 function toggleVerifiedOnly() {
@@ -1007,8 +1066,8 @@ function toggleVerifiedOnly() {
 function listStatusTag(c) {
   if (c.status === 'verified') return `<span class="ltag ok">✓ 검증</span>`;
   if (c.status === 'flagged') return `<span class="ltag bad">확인필요</span>`;
-  if (c.status === 'closing') return `<span class="ltag red">폐업?</span>`;
-  if (c.status === 'notcafe') return `<span class="ltag red">카페아님?</span>`;
+  if (c.status === 'closing') return `<span class="ltag red">폐업 추정</span>`;
+  if (c.status === 'notcafe') return `<span class="ltag red">카페 아님 추정</span>`;
   return '';
 }
 
@@ -1150,15 +1209,16 @@ function getFiltered() {
 function applyFilters(resetLimit = true) {
   if (resetLimit) listLimit = 50;
   const filtered = getFiltered();
-  // 이름/주소 검색은 전체 지역 대상 (특정 카페 찾기), 그 외엔 마지막 검색 영역 기준 (네이버식)
-  const kwActive = !!document.getElementById('search-input').value.trim();
-  const listFiltered = (!kwActive && areaBounds)
+  // 이름/주소 검색은 전체 지역 대상 (특정 카페 찾기), 그 외엔 보이는 영역 기준
+  const kw = kwActive();
+  const listFiltered = (!kw && areaBounds)
     ? filtered.filter(c => areaBounds.contain(new kakao.maps.LatLng(c.lat, c.lng)))
     : filtered;
   renderListItems(listFiltered, filtered.length);
   syncMarkers(listFiltered);
   updateFilterBadge();
-  document.getElementById('search-clear').style.display = kwActive ? 'flex' : 'none';
+  document.getElementById('fav-map-btn')?.classList.toggle('on', favOnly);
+  document.getElementById('search-clear').style.display = kw ? 'flex' : 'none';
   // 검색어/필터가 바뀌면 결과 처음부터 보이도록 (더 보기일 땐 위치 유지)
   if (resetLimit) document.getElementById('panel-scroll').scrollTop = 0;
 }
@@ -1353,11 +1413,11 @@ function summarizeClosures(rows) {
 
 /* 상태 라벨 정의 */
 const STATUS = {
-  verified: { badge: '✓ 검증됨',          cls: 'ok',   dot: 'ok'  },
-  pending:  { badge: '검증 대기',          cls: '',     dot: ''    },
-  flagged:  { badge: '⚠ 정보 확인 필요',   cls: 'bad',  dot: 'bad' },
-  closing:  { badge: '⚠ 폐업 확인 필요',   cls: 'red',  dot: 'red' },
-  notcafe:  { badge: '⚠ 카페 여부 확인 필요', cls: 'red', dot: 'red' },
+  verified: { badge: '✓ 검증됨',        cls: 'ok',  dot: 'ok'  },
+  pending:  { badge: '검증 대기',        cls: '',    dot: ''    },
+  flagged:  { badge: '⚠ 정보 확인 필요', cls: 'bad', dot: 'bad' },
+  closing:  { badge: '⚠ 폐업 추정',      cls: 'red', dot: 'red' },
+  notcafe:  { badge: '⚠ 카페 아님 추정',  cls: 'red', dot: 'red' },
 };
 function statusBadge(c) {
   const s = STATUS[c.status] || STATUS.pending;
@@ -1465,10 +1525,10 @@ function freshnessText(c) {
 /* 폐업 / 카페아님 배너 */
 function closureBanner(c) {
   const notcafe = c.status === 'notcafe';
-  // 삭제 단계(추정)
+  // 삭제 단계(추정) — 폐업과 카페 아님은 완전히 같은 절차를 거친다
   if (c.status === 'closing' || c.status === 'notcafe') {
     const what = notcafe ? '카페가 아니라는' : '폐업';
-    const label = notcafe ? '카페 여부 확인 필요' : '폐업 확인 필요';
+    const label = notcafe ? '카페 아님 추정' : '폐업 추정';
     const cnt = notcafe ? c.notcafeCount : c.closedCount;
     const at = notcafe ? c.lastNotcafeAt : c.lastClosedAt;
     return `<div class="closure-banner closed">
