@@ -1722,6 +1722,28 @@ async function voteCheck(ok) {
 }
 
 /* 사유 → 수정할 항목 매핑 */
+/* 달라요 사유가 이미 해결된 경우: "지금은 맞아요"로 그 사유를 정리한다.
+   혼자서 남의 신고를 지울 수는 없고, 폐업 해제와 같은 기준(서로 다른 2명)을 쓴다 */
+async function confirmReason(reason) {
+  if (!requireLogin()) return;
+  const ok = await uiAsk({
+    title: `'${reason}'가 해결됐나요?`,
+    msg: '지금 표시된 정보가 맞다면 확인해 주세요. 회원님을 포함해 <b>2명</b>이 확인하면 이 의견이 정리돼요.<br>' +
+         '정보가 실제로 다르다면 대신 <b>수정</b>을 눌러 고쳐주세요.',
+    ok: '지금 정보가 맞아요',
+  });
+  if (!ok) return;
+
+  const { data, error } = await db.rpc('confirm_reason', {
+    p_cafe_id: currentCafe.id, p_reason: reason,
+  });
+  if (error) return toast('처리에 실패했어요');
+  await refreshCheckState();
+  toast(data?.cleared
+    ? `'${reason}' 의견을 정리했어요. 고마워요!`
+    : `확인 ${data?.ok_since || 1}/2 — 한 명이 더 확인하면 정리돼요`);
+}
+
 function reasonToField(reason) {
   if (reason.includes('위치')) return 'addr';
   if (reason.includes('전화')) return 'phone';
@@ -1803,7 +1825,11 @@ function renderCheckBox(c) {
         <div class="rs-title">다르다는 의견 <span>최근 순 · 정확한 정보를 알면 고쳐주세요</span></div>
         ${reasons.map(([r, n, at]) => {
           const f = reasonToField(r);
-          return `<span class="rs-chip">${r} <b>${n}</b>${at ? `<i class="rs-t">${timeAgo(at)}</i>` : ''}${f ? `<button class="rs-fix" onclick="openEditInfo('${f}')">수정</button>` : ''}</span>`;
+          return `<span class="rs-chip">${r} <b>${n}</b>${at ? `<i class="rs-t">${timeAgo(at)}</i>` : ''}` +
+            `<button class="rs-ok" onclick="confirmReason(${JSON.stringify(r).replace(/"/g, '&quot;')})"
+                     title="지금 정보가 맞다면 눌러주세요">지금은 맞아요</button>` +
+            (f ? `<button class="rs-fix" onclick="openEditInfo('${f}')">수정</button>` : '') +
+            `</span>`;
         }).join('')}
       </div>` : ''}
     </div>`;
