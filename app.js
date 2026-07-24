@@ -1276,7 +1276,7 @@ async function loadCafeDetail(c) {
   const [rv, ph, ck, my] = await Promise.all([
     db.from('reviews').select('*, profiles(nick)').eq('cafe_id', c.id).order('created_at', { ascending: false }),
     db.from('cafe_photos').select('url').eq('cafe_id', c.id),
-    db.from('cafe_checks').select('is_correct, reason').eq('cafe_id', c.id),
+    db.from('cafe_checks').select('is_correct, reason, created_at').eq('cafe_id', c.id),
     currentUser
       ? db.from('cafe_checks').select('is_correct').eq('cafe_id', c.id).eq('user_id', currentUser.id).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -1296,21 +1296,59 @@ async function loadCafeDetail(c) {
   c.avg_stars = c.reviews.length
     ? +(c.reviews.reduce((s, r) => s + r.stars, 0) / c.reviews.length).toFixed(1) : 0;
   c.photos = (ph.data || []).map(p => p.url);
-  c.checkOk = (ck.data || []).filter(x => x.is_correct).length;
-  c.checkBad = (ck.data || []).filter(x => !x.is_correct).length;
-  // 달라요 사유 집계 (많은 순)
-  const rc = {};
-  (ck.data || []).forEach(x => { if (!x.is_correct && x.reason) rc[x.reason] = (rc[x.reason] || 0) + 1; });
-  c.reasonCounts = Object.entries(rc).sort((a, b) => b[1] - a[1]);
+  Object.assign(c, summarizeChecks(ck.data || []));
   c.myCheck = my.data ? my.data.is_correct : null;
 
   // 최신 상태·폐업 신고·수정 시각
   const { data: cf } = await db.from('cafes').select('status, closed, updated_at, hours').eq('id', c.id).single();
   if (cf) { c.status = cf.status; c.closed = !!cf.closed; c.updatedAt = cf.updated_at; c.hours = cf.hours || ''; }
-  const { data: cls } = await db.from('cafe_closures').select('kind').eq('cafe_id', c.id);
-  c.closureReports = (cls || []).length;
-  c.closedCount = (cls || []).filter(x => x.kind === 'closed').length;
-  c.notcafeCount = (cls || []).filter(x => x.kind === 'notcafe').length;
+  const { data: cls } = await db.from('cafe_closures').select('kind, created_at').eq('cafe_id', c.id);
+  Object.assign(c, summarizeClosures(cls || []));
+}
+
+/* 가장 최근 시각 (없으면 null) */
+function latestOf(rows) {
+  let best = null;
+  rows.forEach(x => {
+    const t = Date.parse(x.created_at || '');
+    if (!isNaN(t) && (best === null || t > best)) best = t;
+  });
+  return best === null ? null : new Date(best).toISOString();
+}
+
+/* 맞아요·달라요 집계 + 각각 마지막으로 투표된 시각, 사유별 최근 시각 */
+function summarizeChecks(rows) {
+  const ok = rows.filter(x => x.is_correct);
+  const bad = rows.filter(x => !x.is_correct);
+  const rc = {};
+  bad.forEach(x => {
+    if (!x.reason) return;
+    const e = rc[x.reason] || (rc[x.reason] = { n: 0, rows: [] });
+    e.n++; e.rows.push(x);
+  });
+  return {
+    checkOk: ok.length,
+    checkBad: bad.length,
+    lastOkAt: latestOf(ok),
+    lastBadAt: latestOf(bad),
+    // 최근에 나온 의견이 현재 정보를 더 잘 반영하므로 최신순 → 같으면 많은 순
+    reasonCounts: Object.entries(rc)
+      .map(([r, e]) => [r, e.n, latestOf(e.rows)])
+      .sort((a, b) => Date.parse(b[2] || 0) - Date.parse(a[2] || 0) || b[1] - a[1]),
+  };
+}
+
+/* 폐업 / 카페아님 제보 집계 + 최근 제보 시각 */
+function summarizeClosures(rows) {
+  const closed = rows.filter(x => x.kind === 'closed');
+  const notcafe = rows.filter(x => x.kind === 'notcafe');
+  return {
+    closureReports: rows.length,
+    closedCount: closed.length,
+    notcafeCount: notcafe.length,
+    lastClosedAt: latestOf(closed),
+    lastNotcafeAt: latestOf(notcafe),
+  };
 }
 
 /* 상태 라벨 정의 */
@@ -1432,17 +1470,18 @@ function closureBanner(c) {
     const what = notcafe ? '카페가 아니라는' : '폐업';
     const label = notcafe ? '카페 여부 확인 필요' : '폐업 확인 필요';
     const cnt = notcafe ? c.notcafeCount : c.closedCount;
+    const at = notcafe ? c.lastNotcafeAt : c.lastClosedAt;
     return `<div class="closure-banner closed">
-      <b>${label}</b> — ${what} 제보 ${cnt}건이 모였어요. 방문 전에 꼭 확인하세요.<br>
+      <b>${label}</b> — ${what} 제보 ${cnt}건이 모였어요${at ? ` (최근 ${timeAgo(at)})` : ''}. 방문 전에 꼭 확인하세요.<br>
       정보가 맞다면 아래 <b>맞아요</b>를 눌러주세요. 여러 명이 확인하면 정상으로 돌아가고,
       계속 방치되면 지도에서 삭제돼요.</div>`;
   }
   // 아직 임계 미달이지만 제보가 있는 경우
   if (c.closedCount > 0 || c.notcafeCount > 0) {
     const bits = [];
-    if (c.closedCount > 0) bits.push(`폐업 제보 ${c.closedCount}건`);
-    if (c.notcafeCount > 0) bits.push(`카페 아님 제보 ${c.notcafeCount}건`);
-    return `<div class="closure-banner warn"><b>${bits.join(' · ')}</b> — 방문 전에 확인해 주세요.</div>`;
+    if (c.closedCount > 0) bits.push(`폐업 제보 ${c.closedCount}건${c.lastClosedAt ? ` · 최근 ${timeAgo(c.lastClosedAt)}` : ''}`);
+    if (c.notcafeCount > 0) bits.push(`카페 아님 제보 ${c.notcafeCount}건${c.lastNotcafeAt ? ` · 최근 ${timeAgo(c.lastNotcafeAt)}` : ''}`);
+    return `<div class="closure-banner warn"><b>${bits.join(' / ')}</b> — 방문 전에 확인해 주세요.</div>`;
   }
   return '';
 }
@@ -1658,21 +1697,22 @@ function reasonCancel() {
 /* 투표 후 상태만 다시 읽어서 화면 갱신 (상세 전체를 다시 열지 않음) */
 async function refreshCheckState() {
   const id = currentCafe.id;
-  const [ck, my, cf] = await Promise.all([
-    db.from('cafe_checks').select('is_correct, reason').eq('cafe_id', id),
+  const [ck, my, cf, cls] = await Promise.all([
+    db.from('cafe_checks').select('is_correct, reason, created_at').eq('cafe_id', id),
     db.from('cafe_checks').select('is_correct').eq('cafe_id', id).eq('user_id', currentUser.id).maybeSingle(),
     db.from('cafes').select('status').eq('id', id).single(),
+    db.from('cafe_closures').select('kind, created_at').eq('cafe_id', id),
   ]);
-  currentCafe.checkOk = (ck.data || []).filter(x => x.is_correct).length;
-  currentCafe.checkBad = (ck.data || []).filter(x => !x.is_correct).length;
-  const rc = {};
-  (ck.data || []).forEach(x => { if (!x.is_correct && x.reason) rc[x.reason] = (rc[x.reason] || 0) + 1; });
-  currentCafe.reasonCounts = Object.entries(rc).sort((a, b) => b[1] - a[1]);
+  Object.assign(currentCafe, summarizeChecks(ck.data || []));
+  Object.assign(currentCafe, summarizeClosures(cls.data || []));
   currentCafe.myCheck = my.data ? my.data.is_correct : null;
   const prevStatus = currentCafe.status;
   if (cf.data) currentCafe.status = cf.data.status;
   const box = document.querySelector('.check-box');
   if (box) box.outerHTML = renderCheckBox(currentCafe);
+  const ban = document.querySelector('.closure-banner');
+  const newBan = closureBanner(currentCafe);
+  if (ban) ban.outerHTML = newBan || '';
   // 상태가 바뀌면 지도 마커도 갱신
   if (prevStatus !== currentCafe.status) {
     const mk = markerByCafe.get(id);
@@ -1682,6 +1722,10 @@ async function refreshCheckState() {
 
 function renderCheckBox(c) {
   const reasons = c.reasonCounts || [];
+  // 마지막 투표 시각 — 어느 쪽 의견이 더 최근인지 한눈에 보이게
+  const votes = [];
+  if (c.lastOkAt)  votes.push(`맞아요 ${timeAgo(c.lastOkAt)}`);
+  if (c.lastBadAt) votes.push(`달라요 ${timeAgo(c.lastBadAt)}`);
   return `
     <div class="check-box">
       <div class="cb-head">${statusBadge(c)} <span class="cb-q">이 카페 정보가 맞나요?</span></div>
@@ -1691,12 +1735,13 @@ function renderCheckBox(c) {
         <button class="cb ${c.myCheck === false ? 'on bad' : ''}" onclick="voteCheck(false)"
           title="${c.myCheck === false ? '다시 누르면 취소돼요' : ''}">달라요 ${c.checkBad || 0}</button>
       </div>
+      ${votes.length ? `<div class="cb-when">최근 투표 · ${votes.join(' · ')}</div>` : ''}
       ${reasons.length ? `
       <div class="reason-summary">
-        <div class="rs-title">다르다는 의견 — 정확한 정보를 알면 고쳐주세요</div>
-        ${reasons.map(([r, n]) => {
+        <div class="rs-title">다르다는 의견 <span>최근 순 · 정확한 정보를 알면 고쳐주세요</span></div>
+        ${reasons.map(([r, n, at]) => {
           const f = reasonToField(r);
-          return `<span class="rs-chip">${r} <b>${n}</b>${f ? `<button class="rs-fix" onclick="openEditInfo('${f}')">수정</button>` : ''}</span>`;
+          return `<span class="rs-chip">${r} <b>${n}</b>${at ? `<i class="rs-t">${timeAgo(at)}</i>` : ''}${f ? `<button class="rs-fix" onclick="openEditInfo('${f}')">수정</button>` : ''}</span>`;
         }).join('')}
       </div>` : ''}
     </div>`;
